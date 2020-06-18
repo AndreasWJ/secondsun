@@ -9,16 +9,33 @@ p {
     font-size: 20px;
     background-color: rgba(221, 221, 221, 0.3);
     z-index: 2147483647;
-    pointer-events: none;
-    min-width: 25px;
-    min-height: 25px;
+    min-width: 35px;
+    min-height: 35px;
     width: 2%;
     border-radius: 50%;
     margin: 25px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
 }
 
 #ss-container::after {
     content: "";
     display: block;
     padding-bottom: 100%;
+}
+
+#ss-container > div {
+    position: absolute;
+    height: 70%;
+    width: 70%;
+    pointer-events: none;
+}
+
+#ss-container > div > img {
+    position: absolute;
+    height: 100%;
+    width: 100%;
+    pointer-events: none;
 }

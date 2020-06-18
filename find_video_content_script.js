@@ -40,10 +40,12 @@ const attachToggleButton = (video) => {
     console.log('Attaching toggle button', video);
     const container = document.createElement('div');
     container.id = 'ss-container';
+    const innerContainer = document.createElement('div');
     const toggle = document.createElement('img');
     toggle.src = chrome.runtime.getURL('images/icon.png');
-    // container.appendChild(toggle);
-    container.onclick = toggleOnClick;
+    innerContainer.appendChild(toggle);
+    container.appendChild(innerContainer);
+    // container.onclick = toggleOnClick;
     // Ensure that a container has not yet already been injected
     if (video.nextSibling && video.nextSibling.id === 'ss-container') {
         console.log('Toggle container already in DOM');
@@ -51,6 +53,13 @@ const attachToggleButton = (video) => {
     }
 
     addStylesheet();
+    // Event listener should be on the element in order to be able to stop the propagation
+    /* document.addEventListener('click', (e) => {
+        if (e.target && e.target.id== 'ss-container') {
+              toggleOnClick(e);
+        }
+    }); */
+    container.addEventListener('click', toggleOnClick, false);
     // Video nodes can't contain elements, place it adjacent to the video
     // video.appendChild(container);
     video.parentNode.insertBefore(container, video.nextSibling);
@@ -58,6 +67,8 @@ const attachToggleButton = (video) => {
 
 const toggleOnClick = (e) => {
     console.log('Toggle click', e);
+    e.stopPropagation();
+    e.preventDefault();
 };
 
 chrome.runtime.onMessage.addListener((req, sender) => {
