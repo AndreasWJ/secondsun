@@ -32,26 +32,29 @@ const tail = ([x, ...xs]) => xs;
 
 const isEmptyObject = (obj) => (Object.keys(obj).length === 0 && obj.constructor === Object);
 
+// Attach overlay toggle depending on the player
+// For certain reoccuring players you attach the toggle button
+// in the player's toolbar
+// For unrecognized players; apply default button placement
 const attachToggleButton = (video) => {
-    // Attach overlay toggle depending on the player
-    // For certain reoccuring players you attach the toggle button
-    // in the player's toolbar
-    // For unrecognized players; apply default button placement
     console.log('Attaching toggle button', video);
+    // Create button container
     const container = document.createElement('div');
     container.id = 'ss-container';
+    // Create inner container(to enable CSS hack for a perfect square shape)
     const innerContainer = document.createElement('div');
     const toggle = document.createElement('img');
     toggle.src = chrome.runtime.getURL('images/icon.png');
     innerContainer.appendChild(toggle);
     container.appendChild(innerContainer);
-    // container.onclick = toggleOnClick;
+
     // Ensure that a container has not yet already been injected
     if (video.nextSibling && video.nextSibling.id === 'ss-container') {
         console.log('Toggle container already in DOM');
         return;
     }
 
+    // TODO: Place somewhere different, has nothing to do with attaching toggle
     addStylesheet();
     // Event listener should be on the element in order to be able to stop the propagation
     /* document.addEventListener('click', (e) => {
@@ -71,12 +74,16 @@ const toggleOnClick = (e) => {
     e.preventDefault();
 };
 
-chrome.runtime.onMessage.addListener((req, sender) => {
-    console.log('Received le message');
-    if (req.status === 'CONTENT_UPDATE') {
-        console.log('Content update, check for video elements again');
-        findVideoNodes();
-    }
+findVideoNodes();
+
+const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+        const addedNodes = [ ...mutation.addedNodes ];          // Converted to array for simplicity
+        if (addedNodes.some((node) => node.tagName === 'VIDEO')) {
+            console.log('Detected mutation; added video as element');
+            findVideoNodes();
+        }
+    });
 });
 
-findVideoNodes();
+observer.observe(document.body, { childList: true, subtree: true });
