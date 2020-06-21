@@ -1,4 +1,4 @@
-#ss-container {
+#ss-default-container {
     position: absolute;
     top: 0;
     right: 0;
@@ -16,20 +16,20 @@
     cursor: pointer;
 }
 
-#ss-container::after {
+#ss-default-container::after {
     content: "";
     display: block;
     padding-bottom: 100%;
 }
 
-#ss-container > div {
+#ss-default-container > div {
     position: absolute;
     height: 70%;
     width: 70%;
     pointer-events: none;
 }
 
-#ss-container > div > img {
+#ss-default-container > div > img {
     position: absolute;
     height: 100%;
     width: 100%;
