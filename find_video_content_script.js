@@ -75,6 +75,7 @@ const toggleAttacher = {
         const youtubePlayer = document.querySelector('#ytd-player');
 
         if (youtubePlayer !== null) {
+            console.log('Found YouTube player in document');
             // Is the video node in question a YouTube player video?
             // I.e a descendant of the YouTube player node
             if (youtubePlayer.contains(video)) {
