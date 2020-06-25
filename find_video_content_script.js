@@ -189,10 +189,6 @@ const videoAttacher = {
         // video.parentNode.insertBefore(renderCanvas, video.nextSibling);
         // Move the video into its new container
         // 'appendChild' should remove the element after copy
-        // FIXME: Adding the new container, moving the video element,
-        // causes the MutationObserver to run since it thinks a new video element
-        // has appeared. Resulting in an infinite loop because the video element
-        // is found once again in the MutationObserver
         videoContainer.appendChild(video);
         videoContainer.appendChild(renderCanvas); */
 
@@ -201,6 +197,7 @@ const videoAttacher = {
         renderCanvas.id = 'ss-render-canvas';
         video.parentNode.insertBefore(renderCanvas, video.nextSibling);
 
+        // Detect size changes; change size and positioning of render canvas
         const ro = new ResizeObserver(entries => {
             for (let entry of entries) {
               const cr = entry.contentRect;
@@ -209,10 +206,8 @@ const videoAttacher = {
               console.log(`Element padding: ${cr.top}px ; ${cr.left}px`);
               renderCanvas.width = cr.width;
               renderCanvas.height = cr.height;
-              renderCanvas.style.top = entry.target.style.top;
-              renderCanvas.style.right = entry.target.style.right;
-              renderCanvas.style.bottom = entry.target.style.bottom;
-              renderCanvas.style.left = entry.target.style.left;
+              console.log('test', entry.target.style.top, entry.target.style.right, entry.target.style.bottom, entry.target.style.left);
+              videoAttacher.requestVideoPositioning(video, renderCanvas);
             }
         });
           
@@ -220,6 +215,65 @@ const videoAttacher = {
         ro.observe(video);
 
         filterer.init(video, renderCanvas);
+    },
+
+    requestVideoPositioning: (video, renderCanvas) => {
+        console.log('Requesting new canvas position');
+        // If the video node has set position, rely on it
+        // Check if any inline positions are set
+        if (hasInlineStyle(video, 'top', 'right', 'bottom', 'left')) {
+            console.log('Found existing inline video position, relying on it');
+            renderCanvas.style.top = video.style.top;
+            renderCanvas.style.right = video.style.right;
+            renderCanvas.style.bottom = video.style.bottom;
+            renderCanvas.style.left = video.style.left;
+            return;
+        }
+
+        // Check if any positions are set within a stylesheet
+        if (hasStylesheetStyle(video, 'top', 'right', 'bottom', 'left')) {
+            console.log('Found existing stylesheet video position, relying on it');
+            renderCanvas.style.top = window.getComputedStyle(video).getPropertyValue('top');
+            renderCanvas.style.right = window.getComputedStyle(video).getPropertyValue('right');
+            renderCanvas.style.bottom = window.getComputedStyle(video).getPropertyValue('bottom');
+            renderCanvas.style.left = window.getComputedStyle(video).getPropertyValue('left');
+            return;
+        }
+
+        console.log('Calculating canvas positioning based on relative parent and video');
+        const relativeParent = getRelativeParent(video);
+        console.log('New relative parent', relativeParent);
+
+        // Compare video's and relative parent document-relative coordinates
+        // as absolute positioning is based on document rather than window
+        // With the difference between coordinates you'll get new values
+        // for the renderCanvas' top, right, bottom, left attributes
+        const {
+            top: parentTop,
+            right: parentRight,
+            bottom: parentBottom,
+            left: parentLeft,
+        } = getCoords(relativeParent);
+
+        const {
+            top: videoTop,
+            right: videoRight,
+            bottom: videoBottom,
+            left: videoLeft,
+        } = getCoords(video);
+
+        console.log(
+            'New top', (videoTop - parentTop),
+            'new right', (videoRight - parentRight),
+            'New bottom', (videoBottom - parentBottom),
+            'New left', (videoLeft - parentLeft),
+        );
+
+        // Setting top and left should be fine, the width and height depend on the video size
+        renderCanvas.style.top = (videoTop - parentTop) + 'px';
+        // renderCanvas.style.right = (videoRight - parentRight);
+        // renderCanvas.style.bottom = (videoBottom - parentBottom);
+        renderCanvas.style.left = (videoLeft - parentLeft) + 'px';
     },
 };
 
@@ -250,7 +304,53 @@ const filterer = {
     },
 };
 
-// Which video nodes that have already been discovered and dealt
+// Maybe it's possible to set top, left, bottom, right exactly
+// knowing the relative parent and the video node
+// Right now it's mostly based on guesses, the video's style attributes,
+// and a default top and left equal to 0
+const getRelativeParent = (node) => {
+    // Unnest until you find the parent with 'position: relative'
+    // If not found, return document
+    if (node.parentNode === null) {
+        // The current node is document, document nodes cannot have a parent
+        // Return the document element, not the HTML as it's read-only
+        return node.documentElement;
+    }
+
+    if (window.getComputedStyle(node).getPropertyValue('position') === 'relative') {
+        return node;
+    }
+
+    return getRelativeParent(node.parentNode);
+};
+
+// Get document coordinates of the element
+const getCoords = (elem) => {
+    let box = elem.getBoundingClientRect();
+  
+    return {
+      top: box.top + window.pageYOffset,
+      right: box.right + window.pageXOffset,
+      bottom: box.bottom + window.pageYOffset,
+      left: box.left + window.pageXOffset
+    };
+};
+
+const hasInlineStyle = (elem, ...attributes) => {
+    return attributes.some((attribute) => elem.style[attribute] !== '' && elem.style[attribute] !== 'auto');
+};
+
+const hasStylesheetStyle = (elem, ...attributes) => {
+    return attributes.some((attribute) =>
+        window.getComputedStyle(elem).getPropertyValue(attribute) !== '' &&
+        window.getComputedStyle(elem).getPropertyValue(attribute) !== 'auto');
+};
+
+// Adding the new container, moving the video element,
+// causes the MutationObserver to run since it thinks a new video element
+// has appeared. Resulting in an infinite loop because the video element
+// is found once again in the MutationObserver
+// Add a new state array with video nodes that have already been discovered and dealt
 const inspected = [];
 
 // Start running the script by analysing the current DOM for video nodes
