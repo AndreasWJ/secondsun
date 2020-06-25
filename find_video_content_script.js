@@ -11,7 +11,10 @@ const findVideoNodes = () => {
 
     addStylesheet();                // Stylesheet is only added once even if called multiple times
     videoNodes.forEach((node) => {
-        attach(node);
+        if (!inspected.includes(node)) {
+            inspected.push(node);
+            attach(node);
+        }
     });
 };
 
@@ -169,8 +172,86 @@ const toggleOnClick = (e) => {
 const videoAttacher = {
     attach: (video) => {
         console.log('Attaching video');
+        /* const videoContainer = document.createElement('div');
+        videoContainer.id = 'ss-video-container';
+        const renderCanvas = document.createElement('canvas');
+        renderCanvas.id = 'ss-render-canvas';
+        // Copy width and height from video to intermediary canvas
+        // TODO: Figure out a way for dynamic video overlay across different players
+        // You might have to put your own container around the video
+        // const videoStyle = window.getComputedStyle(video);
+        // renderCanvas.style.width = videoStyle.width;
+        // renderCanvas.style.height = videoStyle.height;
+        // Append the video container as an inner container
+        video.parentNode.appendChild(videoContainer);
+
+        // Append canvas adjacent to the source element
+        // video.parentNode.insertBefore(renderCanvas, video.nextSibling);
+        // Move the video into its new container
+        // 'appendChild' should remove the element after copy
+        // FIXME: Adding the new container, moving the video element,
+        // causes the MutationObserver to run since it thinks a new video element
+        // has appeared. Resulting in an infinite loop because the video element
+        // is found once again in the MutationObserver
+        videoContainer.appendChild(video);
+        videoContainer.appendChild(renderCanvas); */
+
+        // New approach with ResizeObserver to accommodate for videos in absolute positioning
+        const renderCanvas = document.createElement('canvas');
+        renderCanvas.id = 'ss-render-canvas';
+        video.parentNode.insertBefore(renderCanvas, video.nextSibling);
+
+        const ro = new ResizeObserver(entries => {
+            for (let entry of entries) {
+              const cr = entry.contentRect;
+              console.log('Element:', entry.target);
+              console.log(`Element size: ${cr.width}px x ${cr.height}px`);
+              console.log(`Element padding: ${cr.top}px ; ${cr.left}px`);
+              renderCanvas.width = cr.width;
+              renderCanvas.height = cr.height;
+              renderCanvas.style.top = entry.target.style.top;
+              renderCanvas.style.right = entry.target.style.right;
+              renderCanvas.style.bottom = entry.target.style.bottom;
+              renderCanvas.style.left = entry.target.style.left;
+            }
+        });
+          
+        // Observe one or multiple elements
+        ro.observe(video);
+
+        filterer.init(video, renderCanvas);
     },
 };
+
+const filterer = {
+    init: function(video, renderCanvas) {
+        console.log('Initializing filterer');
+        this.video = video;
+        this.renderCanvas = renderCanvas;
+        this.renderContext = renderCanvas.getContext('2d');
+
+        // TODO: Call method that repetedly computes frame
+    },
+
+    computeFrame: function() {
+        this.renderContext.drawImage(this.video, 0, 0, this.video.width, this.video.height);
+        const frame = this.renderContext.getImageData(0, 0, this.video.width, this.video.height);
+        const l = frame.data.length / 4;  
+
+        for (const i = 0; i < l; i++) {
+            const grey = (frame.data[i * 4 + 0] + frame.data[i * 4 + 1] + frame.data[i * 4 + 2]) / 3;
+
+            frame.data[i * 4 + 0] = grey;
+            frame.data[i * 4 + 1] = grey;
+            frame.data[i * 4 + 2] = grey;
+        }
+
+        this.renderContext.putImageData(frame, 0, 0);
+    },
+};
+
+// Which video nodes that have already been discovered and dealt
+const inspected = [];
 
 // Start running the script by analysing the current DOM for video nodes
 findVideoNodes();
@@ -181,6 +262,7 @@ const observer = new MutationObserver((mutations) => {
         const addedNodes = [ ...mutation.addedNodes ];          // Converted to array for simplicity
         if (addedNodes.some((node) => node.tagName === 'VIDEO')) {
             console.log('Detected mutation; added video as element');
+
             findVideoNodes();
         }
     });
