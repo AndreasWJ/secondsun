@@ -198,7 +198,14 @@ const videoAttacher = {
         video.parentNode.insertBefore(renderCanvas, video.nextSibling);
 
         // Detect size changes; change size and positioning of render canvas
-        const ro = new ResizeObserver(entries => {
+        // TODO: Add additional observer for changes in positioning; top, right, bottom, left
+        // On YouTube there are cases where the position changes but not the actual size of
+        // the player. Probably to accommodate for different aspect ratios
+        // To illustrate the problem resize the window so the YouTube player is small height-wise
+        // but has a great amount of space width-wise
+        // Then make the window smaller horizontally, the video will keep its size
+        // but the position will change
+        const ro = new ResizeObserver((entries) => {
             for (let entry of entries) {
               const cr = entry.contentRect;
               console.log('Element:', entry.target);
@@ -213,6 +220,27 @@ const videoAttacher = {
           
         // Observe one or multiple elements
         ro.observe(video);
+
+        // Observe changes to video positioning
+        const mo = new MutationObserver((mutations) => {
+            for (let mutation of mutations) {
+                if (
+                    mutation.target.style.top !== extractAttributeValue(mutation.oldValue, 'top') ||
+                    mutation.target.style.right !== extractAttributeValue(mutation.oldValue, 'right') ||
+                    mutation.target.style.bottom !== extractAttributeValue(mutation.oldValue, 'bottom') ||
+                    mutation.target.style.left !== extractAttributeValue(mutation.oldValue, 'left')
+                ) {
+                    console.log('The video node received or changed its position, requesting canvas update');
+                    videoAttacher.requestVideoPositioning(video, renderCanvas);
+                }
+            }
+        });
+
+        mo.observe(video, {
+            attributes: true,
+            attributeFilter: ['style'],
+            attributeOldValue: true,
+        });
 
         filterer.init(video, renderCanvas);
     },
@@ -284,15 +312,36 @@ const filterer = {
         this.renderCanvas = renderCanvas;
         this.renderContext = renderCanvas.getContext('2d');
 
-        // TODO: Call method that repetedly computes frame
+        // Call method that repetedly computes frame
+        const self = this;
+        this.video.addEventListener('play', function() {
+            self.timerCallback();
+        }, false);
+    },
+
+    timerCallback: function() {
+        if (this.video.paused || this.video.ended) {  
+            return;  
+        }
+  
+        this.computeFrame();
+        const self = this;
+
+        setTimeout(function() {
+            self.timerCallback();
+        }, 16);
     },
 
     computeFrame: function() {
-        this.renderContext.drawImage(this.video, 0, 0, this.video.width, this.video.height);
-        const frame = this.renderContext.getImageData(0, 0, this.video.width, this.video.height);
+        // console.log('computeFrame', this.video, this.video.style.width, this.video.style.height);
+        this.renderContext.drawImage(this.video, 0, 0, parseInt(this.video.style.width, 10), parseInt(this.video.style.height, 10));
+        // Error at getImageData, says source width is equal to 0
+        // 'this.video.width' and 'this.video.height' are both equal to 0 because
+        // the video source has yet to load
+        const frame = this.renderContext.getImageData(0, 0, parseInt(this.video.style.width, 10), parseInt(this.video.style.height, 10));
         const l = frame.data.length / 4;  
 
-        for (const i = 0; i < l; i++) {
+        for (let i = 0; i < l; i++) {
             const grey = (frame.data[i * 4 + 0] + frame.data[i * 4 + 1] + frame.data[i * 4 + 2]) / 3;
 
             frame.data[i * 4 + 0] = grey;
@@ -344,6 +393,22 @@ const hasStylesheetStyle = (elem, ...attributes) => {
     return attributes.some((attribute) =>
         window.getComputedStyle(elem).getPropertyValue(attribute) !== '' &&
         window.getComputedStyle(elem).getPropertyValue(attribute) !== 'auto');
+};
+
+/**
+ * 
+ * @param {*} attributeString example input "top: 0px; left: 277.333px;"
+ * @param {*} attributeName
+ */
+const extractAttributeValue = (attributeString, attributeName) => {
+    // The regex is simple, it uses a lookahead to match any character or digit
+    // followed by a semicolon. This will match all attribute values
+    // But what's interesting is a certain value. To find a specific value
+    // a lookbehind is used to look for 'top: ' or 'left: ' for example
+    const regex = new RegExp(`(?<=${attributeName}: )[a-zA-Z0-9.]*(?=;)`);
+    const match = attributeString.match(regex);
+
+    return match !== null ? match[0] : '';
 };
 
 // Adding the new container, moving the video element,
