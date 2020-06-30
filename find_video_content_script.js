@@ -11,34 +11,11 @@ const findVideoNodes = () => {
 
     addStylesheet();                // Stylesheet is only added once even if called multiple times
     videoNodes.forEach((node) => {
-        if (!inspected.includes(node)) {
+        if (node !== undefined && !inspected.includes(node)) {
             inspected.push(node);
             attach(node);
         }
     });
-};
-
-// TODO: Maybe pick attacher based on the player's ids if there are any?
-// Like the YouTube player and JW player etc
-const getAttacher = () => {
-    // The regex below is simple but does what it needs to
-    // It utilizes a lookahead, (?=.com), to match everything up until that point
-    // It utilizes a lookbehind, (?<=\/\/www\.), to match everything after //www.
-    // By matching after //www. you get the domain name which is crucial when picking attacher
-    /* const domains = window.location.href.match(new RegExp('(?<=\/\/www\.).*(?=.com)'));
-
-    if (domains.length <= 0) {
-        console.log('Could not decipher domain name from URL');
-        return new Attacher();
-    }
-
-    switch (domains[0]) {
-        case 'youtube':
-            console.log('Picking YouTube attacher');
-            return new YouTubeAttacher();
-        default:
-            return new Attacher();
-    } */
 };
 
 // Function can only be executed once. To prevent multiple repetitive stylesheets
@@ -171,13 +148,13 @@ const toggleOnClick = (e) => {
 
 const videoAttacher = {
     attach: (video) => {
-        console.log('Attaching video');
+        console.log('Attaching video', video);
         /* const videoContainer = document.createElement('div');
         videoContainer.id = 'ss-video-container';
         const renderCanvas = document.createElement('canvas');
         renderCanvas.id = 'ss-render-canvas';
         // Copy width and height from video to intermediary canvas
-        // TODO: Figure out a way for dynamic video overlay across different players
+        // Figure out a way for dynamic video overlay across different players
         // You might have to put your own container around the video
         // const videoStyle = window.getComputedStyle(video);
         // renderCanvas.style.width = videoStyle.width;
@@ -198,7 +175,7 @@ const videoAttacher = {
         video.parentNode.insertBefore(renderCanvas, video.nextSibling);
 
         // Detect size changes; change size and positioning of render canvas
-        // TODO: Add additional observer for changes in positioning; top, right, bottom, left
+        // Add additional observer for changes in positioning; top, right, bottom, left
         // On YouTube there are cases where the position changes but not the actual size of
         // the player. Probably to accommodate for different aspect ratios
         // To illustrate the problem resize the window so the YouTube player is small height-wise
@@ -224,7 +201,10 @@ const videoAttacher = {
         // Observe changes to video positioning
         const mo = new MutationObserver((mutations) => {
             for (let mutation of mutations) {
+                // If there's no previous value recorded you cannot compare
+                // Update the video positioning in case
                 if (
+                    mutation.oldValue === null ||
                     mutation.target.style.top !== extractAttributeValue(mutation.oldValue, 'top') ||
                     mutation.target.style.right !== extractAttributeValue(mutation.oldValue, 'right') ||
                     mutation.target.style.bottom !== extractAttributeValue(mutation.oldValue, 'bottom') ||
@@ -305,41 +285,307 @@ const videoAttacher = {
     },
 };
 
+// See https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial/Animating_textures_in_WebGL
 const filterer = {
     init: function(video, renderCanvas) {
-        console.log('Initializing filterer');
+        console.log('Initializing filterer', video, renderCanvas);
         this.video = video;
         this.renderCanvas = renderCanvas;
-        this.renderContext = renderCanvas.getContext('2d');
+        // this.renderContext = renderCanvas.getContext('2d');
+        // Save a reference to a bound timerCallback
+        // this.timerCallback = this.timerCallback.bind(this);
+        /* const cWorker = renderCanvas.transferControlToOffscreen();
+        this.worker = new Worker("filter_worker.js");
+        this.worker.postMessage({ canvas: cWorker }, [cWorker]);
 
         // Call method that repetedly computes frame
         const self = this;
         this.video.addEventListener('play', function() {
-            self.timerCallback();
-        }, false);
+            requestAnimationFrame(self.timerCallback);
+            // self.timerCallback();
+        }, false); */
+
+        const gl = this.renderCanvas.getContext('webgl');
+
+        if (gl === null || gl === undefined) {
+            console.warn('Could not initialize WebGL');
+        }
+
+        // The canvas won't be cleared upon initialization because the canvas
+        // has not been loaded just like the video hasn't been loaded
+        // console.log('Clearing WebGL canvas');
+        // this.gl.clearColor(1.0, 0.0, 0.0, 1.0);
+        // this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+
+        // TODO: Add the rest of WebGL functionality by adding a 2D texture
+        // Update the texture image each frame
+        // TODO: Apply filters through convulation matrices in the fragment shader
+
+        // Since the script execution time compared to the video's load time
+        // might be a bit different; listen to both playing(video just started playing)
+        // and timeupdate. Because if the video started playing before the script
+        // the filterer will run anyways with timeupdate
+        // TODO: Remove listener once one fires
+        const self = this;
+        video.addEventListener('playing', function() {
+            self.copyVideo = true;
+        }, true);
+       
+        video.addEventListener('timeupdate', function() {
+            self.copyVideo = true;
+        }, true);
+
+        // Don't need any projection matrix. Clip space coordinates are fine
+        // No need for perspective 3D either
+        const vsSource = `
+            attribute vec4 aVertexPosition;
+            attribute vec2 aTextureCoord;
+
+            varying highp vec2 vTextureCoord;
+
+            void main(void) {
+                gl_Position = aVertexPosition;
+                vTextureCoord = aTextureCoord;
+            }
+        `;
+
+        const fsSource = `
+            varying highp vec2 vTextureCoord;
+            uniform sampler2D uImage;
+            void main(void) {
+                gl_FragColor = texture2D(uImage, vTextureCoord);
+            }
+        `;
+
+        const shaderProgram = this.initShaderProgram(gl, vsSource, fsSource);
+        this.config = {
+            program: shaderProgram,
+            attribLocations: {
+                vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
+                textureCoord: gl.getAttribLocation(shaderProgram, 'aTextureCoord'),
+            },
+            uniformLocations: {
+                image: gl.getUniformLocation(shaderProgram, 'uImage'),
+            },
+        };
+
+        this.buffers = this.initBuffers(gl);
+        this.texture = this.initTexture(gl);
+
+        requestAnimationFrame((timestamp) => this.render(timestamp, gl));
     },
 
-    timerCallback: function() {
-        if (this.video.paused || this.video.ended) {  
-            return;  
-        }
-  
-        this.computeFrame();
-        const self = this;
+    initBuffers: function(gl) {
+        // Create a buffer to put three 2d clip space points in
+        const positionBuffer = gl.createBuffer();
 
-        setTimeout(function() {
-            self.timerCallback();
-        }, 16);
+        // Bind it to ARRAY_BUFFER (think of it as ARRAY_BUFFER = positionBuffer)
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+
+        // Written as clip space coordinates to fill out the entire canvas
+        const positions = [
+            -1, -1,         // Bottom left corner
+            1, -1,          // Bottom right corner
+            -1, 1,          // Top left corner
+            1, 1,           // Top right corner
+        ];
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+        // Create buffer for texture coordinates
+        const textureCoordBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, textureCoordBuffer);
+
+        const textureCoordinates = [
+            0.0,  1.0,          // Top left corner
+            1.0,  1.0,          // Top right corner
+            0.0,  0.0,          // Bottom left corner
+            1.0,  0.0,          // Bottom right corner
+        ];
+
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoordinates), gl.STATIC_DRAW);
+
+        return {
+            position: positionBuffer,
+            textureCoord: textureCoordBuffer,
+        };
+    },
+
+    initTexture: function(gl) {
+        const texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+      
+        // Because video has to be download over the internet
+        // they might take a moment until it's ready so
+        // put a single pixel in the texture so we can
+        // use it immediately.
+        const level = 0;
+        const internalFormat = gl.RGBA;
+        const width = 1;
+        const height = 1;
+        const border = 0;
+        const srcFormat = gl.RGBA;
+        const srcType = gl.UNSIGNED_BYTE;
+        const pixel = new Uint8Array([255, 0, 0, 255]);
+        gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, width, height, border, srcFormat, srcType, pixel);
+      
+        // Turn off mips and set  wrapping to clamp to edge so it
+        // will work regardless of the dimensions of the video.
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      
+        return texture;
+    },
+
+    updateTexture: function (gl, texture, video) {
+        const level = 0;
+        const internalFormat = gl.RGBA;
+        const srcFormat = gl.RGBA;
+        const srcType = gl.UNSIGNED_BYTE;
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, srcFormat, srcType, video);
+    },
+
+    render: function(timestamp, gl) {
+        if (this.copyVideo === true) {
+            this.updateTexture(gl, this.texture, this.video);
+        }
+
+        this.drawScene(gl, this.config, this.buffers, this.texture);
+
+        requestAnimationFrame((timestamp) => this.render(timestamp, gl));
+    },
+
+    drawScene: function(gl, programConfig, buffers, texture) {
+        // Clear the canvas
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        // Tell WebGL how to pull out the positions from the position
+        // buffer into the vertexPosition attribute
+        {
+            const numComponents = 2;
+            const type = gl.FLOAT;
+            const normalize = false;
+            const stride = 0;
+            const offset = 0;
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
+            gl.vertexAttribPointer(
+                programConfig.attribLocations.vertexPosition,
+                numComponents,
+                type,
+                normalize,
+                stride,
+                offset,
+            );
+            gl.enableVertexAttribArray(programConfig.attribLocations.vertexPosition);
+        }
+
+        // Tell WebGL how to pull out the texture coordinates from
+        // the texture coordinate buffer into the textureCoord attribute.
+        {
+            const numComponents = 2;
+            const type = gl.FLOAT;
+            const normalize = false;
+            const stride = 0;
+            const offset = 0;
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.textureCoord);
+            gl.vertexAttribPointer(
+                programConfig.attribLocations.textureCoord,
+                numComponents,
+                type,
+                normalize,
+                stride,
+                offset,
+            );
+            gl.enableVertexAttribArray(programConfig.attribLocations.textureCoord);
+        }
+
+        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+        // Tell it to use our program (pair of shaders)
+        gl.useProgram(programConfig.program);
+
+        // Tell WebGL we want to affect texture unit 0
+        gl.activeTexture(gl.TEXTURE0);
+
+        // Bind the texture to texture unit 0
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+
+        // Tell the shader we bound the texture to texture unit 0
+        gl.uniform1i(programConfig.uniformLocations.image, 0);
+
+        // Draw
+        const primitiveType = gl.TRIANGLE_STRIP;
+        const offset = 0;
+        const count = 4;
+        gl.drawArrays(primitiveType, offset, count);
+    },
+
+    /**
+     * Initialize a shader program, so WebGL knows how to draw our data
+     */
+    initShaderProgram: function(gl, vsSource, fsSource) {
+        const vertexShader = this.loadShader(gl, gl.VERTEX_SHADER, vsSource);
+        const fragmentShader = this.loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
+    
+        // Create the shader program
+        const shaderProgram = gl.createProgram();
+        gl.attachShader(shaderProgram, vertexShader);
+        gl.attachShader(shaderProgram, fragmentShader);
+        gl.linkProgram(shaderProgram);
+    
+        // If creating the shader program failed, alert
+        if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+            alert('Unable to initialize the shader program: ' + gl.getProgramInfoLog(shaderProgram));
+            return null;
+        }
+    
+        return shaderProgram;
+    },
+
+    /**
+     * Creates a shader of the given type, uploads the source and
+     * compiles it.
+     */
+    loadShader: function(gl, type, source) {
+        const shader = gl.createShader(type);
+    
+        // Send the source to the shader object
+        gl.shaderSource(shader, source);
+    
+        // Compile the shader program
+        gl.compileShader(shader);
+    
+        // See if it compiled successfully
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            alert('An error occurred compiling the shaders: ' + gl.getShaderInfoLog(shader));
+            gl.deleteShader(shader);
+            return null;
+        }
+    
+        return shader;
     },
 
     computeFrame: function() {
         // console.log('computeFrame', this.video, this.video.style.width, this.video.style.height);
-        this.renderContext.drawImage(this.video, 0, 0, parseInt(this.video.style.width, 10), parseInt(this.video.style.height, 10));
+        const { width: vWidth, height: vHeight } = getVideoSize(this.video);
+        this.renderContext.drawImage(this.video, 0, 0, parseInt(vWidth, 10), parseInt(vHeight, 10));
         // Error at getImageData, says source width is equal to 0
         // 'this.video.width' and 'this.video.height' are both equal to 0 because
         // the video source has yet to load
-        const frame = this.renderContext.getImageData(0, 0, parseInt(this.video.style.width, 10), parseInt(this.video.style.height, 10));
-        const l = frame.data.length / 4;  
+        // TODO: Get inline style. If not available get computed style
+        // What to do if the computed style is not set either?
+        // The computed style in the case of YouTube is set in percentages
+        // I think the canvas methods will interpret it as 100px instead of 100%
+        // Maybe it's possible to get the parent element's size and multiply with 100% to get the
+        // child's size
+        // It seems like you can use offsetWidth and offsetHeight as a fallback if no
+        // explicit inline size has been set
+        // console.log('frame width height', vWidth, vHeight);
+        const frame = this.renderContext.getImageData(0, 0, parseInt(vWidth, 10), parseInt(vHeight, 10));
+        this.renderContext.clearRect(0, 0, parseInt(vWidth, 10), parseInt(vHeight, 10));
+        const l = frame.data.length / 4;
 
         for (let i = 0; i < l; i++) {
             const grey = (frame.data[i * 4 + 0] + frame.data[i * 4 + 1] + frame.data[i * 4 + 2]) / 3;
@@ -411,12 +657,48 @@ const extractAttributeValue = (attributeString, attributeName) => {
     return match !== null ? match[0] : '';
 };
 
+const getStyle = (elem, attribute) => {
+    if (elem.style && elem.style[attribute] !== '') {
+        return elem.style[attribute];
+    }
+
+    // No inline style specified. Rely on the computed style
+    return window.getComputedStyle(elem).getPropertyValue(attribute);
+};
+
+/**
+ * Different from getStyle since computed style is irrelevant.
+ * Because it often describes sizes in percentages etc,
+ * when exact pixel sizes are of interest.
+ * @param {*} video
+ */
+const getVideoSize = (video) => {
+    let width;
+    let height;
+    if (video.style.width !== '' && video.style.width !== 'auto') {
+        width = video.style.width;
+    } else {
+        width = video.offsetWidth;
+    }
+
+    if (video.style.height !== '' && video.style.height !== 'auto') {
+        height = video.style.height;
+    } else {
+        height = video.offsetHeight;
+    }
+
+    return { width, height };
+};
+
 // Adding the new container, moving the video element,
 // causes the MutationObserver to run since it thinks a new video element
 // has appeared. Resulting in an infinite loop because the video element
 // is found once again in the MutationObserver
 // Add a new state array with video nodes that have already been discovered and dealt
 const inspected = [];
+
+// TODO: Make a toggle boolean for each video node that's toggleable through the button
+// Will make it easier to see framerate differences caused by image manipulations
 
 // Start running the script by analysing the current DOM for video nodes
 findVideoNodes();
