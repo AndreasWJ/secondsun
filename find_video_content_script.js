@@ -285,8 +285,130 @@ const videoAttacher = {
     },
 };
 
+const glSources = {
+    invert: {
+        // Don't need any projection matrix. Clip space coordinates are fine
+        // No need for perspective 3D either
+        vsSource: `
+            attribute vec4 aVertexPosition;
+            attribute vec2 aTextureCoord;
+
+            varying highp vec2 vTextureCoord;
+
+            void main(void) {
+                gl_Position = aVertexPosition;
+                vTextureCoord = aTextureCoord;
+            }
+        `,
+        // The best way to switch between filters seems to be by changing
+        // a uniform and depending on that uniform render invert, dampen, darken
+        // For greyscale you take a pixel. Sum the pixels R, G, and B values
+        // and divide by 3
+        fsSource: `
+            uniform sampler2D uImage;
+
+            varying highp vec2 vTextureCoord;
+            precision mediump float;
+            void main(void) {
+                vec4 pixelColor = texture2D(uImage, vTextureCoord);
+                float average = (pixelColor.r + pixelColor.g + pixelColor.b) / 3.0;
+                // Greyscale filter
+                gl_FragColor = vec4(average, average, average, pixelColor.a);
+            }
+        `,
+    },
+    dampen: {
+        vsSource: `
+            attribute vec4 aVertexPosition;
+            attribute vec2 aTextureCoord;
+
+            varying highp vec2 vTextureCoord;
+
+            void main(void) {
+                gl_Position = aVertexPosition;
+                vTextureCoord = aTextureCoord;
+            }
+        `,
+        fsSource: `
+            uniform sampler2D uImage;
+
+            varying highp vec2 vTextureCoord;
+            precision mediump float;
+            void main(void) {
+                vec4 pixelColor = texture2D(uImage, vTextureCoord);
+                float average = (pixelColor.r + pixelColor.g + pixelColor.b) / 3.0;
+                // Greyscale filter
+                gl_FragColor = vec4(average, average, average, pixelColor.a);
+            }
+        `,
+    },
+    darken: {
+        vsSource: `
+            attribute vec4 aVertexPosition;
+            attribute vec2 aTextureCoord;
+
+            varying highp vec2 vTextureCoord;
+
+            void main(void) {
+                gl_Position = aVertexPosition;
+                vTextureCoord = aTextureCoord;
+            }
+        `,
+        fsSource: `
+            uniform sampler2D uImage;
+
+            varying highp vec2 vTextureCoord;
+            precision mediump float;
+            void main(void) {
+                gl_FragColor = texture2D(uImage, vTextureCoord);
+            }
+        `,
+    },
+};
+
 // See https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial/Animating_textures_in_WebGL
 const filterer = {
+    getShaders: function(gl) {
+        // Can't reference sources from inside the object
+        // Maybe separate the sources and the other properties
+        const shaderPrograms = Object.keys(glSources).reduce((acc, current) => ({
+            ...acc,
+            [current]: this.initShaderProgram(gl, glSources[current].vsSource, glSources[current].fsSource),
+        }), {});
+        return {
+            invert: {
+                program: shaderPrograms.invert,
+                attribLocations: {
+                    vertexPosition: gl.getAttribLocation(shaderPrograms.invert, 'aVertexPosition'),
+                    textureCoord: gl.getAttribLocation(shaderPrograms.invert, 'aTextureCoord'),
+                },
+                uniformLocations: {
+                    image: gl.getUniformLocation(shaderPrograms.invert, 'uImage'),
+                },
+            },
+            dampen: {
+                program: shaderPrograms.dampen,
+                attribLocations: {
+                    vertexPosition: gl.getAttribLocation(shaderPrograms.dampen, 'aVertexPosition'),
+                    textureCoord: gl.getAttribLocation(shaderPrograms.dampen, 'aTextureCoord'),
+                },
+                uniformLocations: {
+                    image: gl.getUniformLocation(shaderPrograms.dampen, 'uImage'),
+                },
+            },
+            darken: {
+                program: shaderPrograms.darken,
+                attribLocations: {
+                    vertexPosition: gl.getAttribLocation(shaderPrograms.darken, 'aVertexPosition'),
+                    textureCoord: gl.getAttribLocation(shaderPrograms.darken, 'aTextureCoord'),
+                },
+                uniformLocations: {
+                    image: gl.getUniformLocation(shaderPrograms.darken, 'uImage'),
+                },
+            },
+        };
+    },
+
     init: function(video, renderCanvas) {
         console.log('Initializing filterer', video, renderCanvas);
         this.video = video;
@@ -335,44 +457,43 @@ const filterer = {
             self.copyVideo = true;
         }, true);
 
-        // Don't need any projection matrix. Clip space coordinates are fine
-        // No need for perspective 3D either
-        const vsSource = `
-            attribute vec4 aVertexPosition;
-            attribute vec2 aTextureCoord;
-
-            varying highp vec2 vTextureCoord;
-
-            void main(void) {
-                gl_Position = aVertexPosition;
-                vTextureCoord = aTextureCoord;
-            }
-        `;
-
-        const fsSource = `
-            varying highp vec2 vTextureCoord;
-            uniform sampler2D uImage;
-            void main(void) {
-                gl_FragColor = texture2D(uImage, vTextureCoord);
-            }
-        `;
-
-        const shaderProgram = this.initShaderProgram(gl, vsSource, fsSource);
-        this.config = {
-            program: shaderProgram,
-            attribLocations: {
-                vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
-                textureCoord: gl.getAttribLocation(shaderProgram, 'aTextureCoord'),
-            },
-            uniformLocations: {
-                image: gl.getUniformLocation(shaderProgram, 'uImage'),
-            },
-        };
-
+        // Initialize shader programs for all available shader configurations
+        // Go through each shader key; for example invert, dampen, darken
+        // For each key, fetch its configuration, and add the compiled shader
+        // program as one of its properties
+        /* this.configs = Object.keys(this.getShaders(gl)).reduce((acc, modeConfig, i, shaders) => ({
+            ...acc,
+            [modeConfig]: this.compileShaderConfig(gl, shaders[modeConfig]),
+        }), {}); */
+        this.configs = this.getShaders(gl);
         this.buffers = this.initBuffers(gl);
         this.texture = this.initTexture(gl);
 
-        requestAnimationFrame((timestamp) => this.render(timestamp, gl));
+        chrome.storage.onChanged.addListener((changes, namespace) => {
+            console.log('chrome.storage.onChanged', changes, namespace);
+            for (key in changes) {
+                if (key === 'renderMode') {
+                    // Change config
+                    // New value available at changes[renderMode].newValue
+                    console.log('Changing render config to', changes[key].newValue);
+                    const newMode = changes[key].newValue;
+                    self.config = self.configs[newMode];
+                }
+            }
+        });
+
+        // Block requestAnimationFrame call until the initial setting has been found
+        chrome.storage.sync.get(['renderMode'], function(result) {
+            // If result.renderMode is undefined then apply invert as default
+            if (result.renderMode === undefined || result.renderMode === null) {
+                console.log('filterer init: Could not find renderMode, applying default');
+                self.config = self.configs.invert;
+            }
+
+            console.log('Retrieved renderMode. Applying', result.renderMode);
+            self.config = self.configs[result.renderMode];
+            requestAnimationFrame((timestamp) => self.render(timestamp, gl));
+        });
     },
 
     initBuffers: function(gl) {
@@ -451,6 +572,7 @@ const filterer = {
             this.updateTexture(gl, this.texture, this.video);
         }
 
+        // Depending on the value of the render mode the config should be changed
         this.drawScene(gl, this.config, this.buffers, this.texture);
 
         requestAnimationFrame((timestamp) => this.render(timestamp, gl));
@@ -695,10 +817,15 @@ const getVideoSize = (video) => {
 // has appeared. Resulting in an infinite loop because the video element
 // is found once again in the MutationObserver
 // Add a new state array with video nodes that have already been discovered and dealt
+// Inspected holds broader objects that each maintain state for individual video nodes
 const inspected = [];
 
 // TODO: Make a toggle boolean for each video node that's toggleable through the button
 // Will make it easier to see framerate differences caused by image manipulations
+
+// TODO: For some reason the toggle button attaches as an overlay on YouTube
+// if you open the YouTube link in another tab
+// However, it works as expected if you open the link within the same active tab
 
 // Start running the script by analysing the current DOM for video nodes
 findVideoNodes();
