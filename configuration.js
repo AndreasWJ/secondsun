@@ -20,6 +20,9 @@ window.onload = () => {
         }
     });
 
+    // 'change' will emit twice on each item
+    // Joining the item first, then leaving it
+    // It's crucial you compare with the previous value
     for (let i = 0; i < radios.length; i++) {
         radios[i].addEventListener('change', function() {
             if (this.value && this.value !== prev) {
