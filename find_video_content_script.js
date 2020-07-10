@@ -1,3 +1,7 @@
+// Decides the default filterer toggle for this page based on
+// what's toggled on previous pages
+let lastToggled = null;
+
 const findVideoNodes = () => {
     // Returns a static NodeList, i.e further DOM changes won't be reflected in the list
     console.log('Finding video nodes');
@@ -12,7 +16,7 @@ const findVideoNodes = () => {
     addStylesheet();                // Stylesheet is only added once even if called multiple times
     videoNodes.forEach((node) => {
         if (node !== undefined && !inspected.has(node)) {
-            inspected.set(node, { video: node, toggle: null, toggled: true });
+            inspected.set(node, { video: node, toggle: null, filterer: new Filterer() });
             attach(node);
         }
     });
@@ -52,66 +56,61 @@ const attach = (video) => {
 const toggleAttacher = {
     attach: (video) => {
         let toggle;
-        // Is the video node within a YouTube player?
-        // const youtubePlayer = document.querySelector('#ytd-player');
-        // const youtubePlayer = document.getElementsByTagName('ytd-player').item(0);
-        // console.log('youtubePlayer', youtubePlayer);
-        const youtubePlayer = document.querySelector('.ytp-right-controls');
-        console.log('youtubePlayer', youtubePlayer);
+        // Is the video node within a YouTube page?
+        const youtubeControls = document.querySelector('.ytp-right-controls');
 
-        if (youtubePlayer !== undefined && youtubePlayer !== null) {
-            console.log('Found YouTube player in document');
-            // Is the video node in question a YouTube player video?
-            // I.e a descendant of the YouTube player node
-            // if (youtubePlayer.contains(video)) {
-            toggle = toggleAttacher.attachYouTube(youtubePlayer);
-            // }
+        if (youtubeControls !== undefined && youtubeControls !== null) {
+            console.log('Found YouTube controls in document');
+            toggle = toggleAttacher.attachYouTube(video, youtubeControls);
         } else {
             // No known player could be identified; apply default toggle
             toggle = toggleAttacher.attachDefault(video);
         }
 
         // Update the inspected map with a referenced to the created toggle button
-        mapAppend(inspected, video, { toggle });
+        // FIXME: toggleAttacher.getDefaultState() returns undefined
+        // const toggled = toggleAttacher.getDefaultState();
+        toggleAttacher.getDefaultState((toggleState) => {
+            // const attachData = inspected.get(video);
+            // attachData.filterer.set(toggleState);
+            mapAppend(inspected, video, { toggle, toggled: toggleState });
+        });
     },
 
-    reattachToPlayer: (player, attacher) => {
-        console.log('reattachToPlayer');
-        const videoChildren = player.querySelectorAll('video');
-        videoChildren.forEach((child) => {
-            console.log('reattachToPlayer: Found video', child);
-            if (inspected.has(child) === true) {
-                const registered = inspected.get(child);
-                registered.toggle.remove();
-                // Reapply toggle button
-                // Caller supplies specific attacher arguments
-                const toggle = attacher();
-                mapAppend(inspected, child, { ...registered, toggle });
+    getDefaultState: (cb) => {
+        if (lastToggled !== null) {
+            console.log('Found default toggle state', lastToggled);
+            // return lastToggled;
+            cb(lastToggled);
+        }
+
+        // Retrieve the lastToggled value from storage
+        // Retrieve the last toggle state before searching and attaching the page
+        chrome.storage.sync.get(['lastToggled'], (result) => {
+            if (result.lastToggled === undefined || result.lastToggled === null) {
+                console.log('Could not find previous toggle state, default to false');
+                lastToggled = false;
+            } else {
+                console.log('Retrieved lastToggled', result.lastToggled);
+                lastToggled = result.lastToggled;
             }
+
+            // return lastToggled;
+            cb(lastToggled);
         });
     },
 
     /**
-     * @argument playerNode is the player container on YouTube, often with id 'ytd-player'
+     * @argument controlsNode is the controls container on YouTube, is available from page load,
+     * even when opening in new tab.
      */
-    attachYouTube: (controlsNode) => {
+    attachYouTube: (video, controlsNode) => {
         console.log('Attaching YouTube toggle button to controls', controlsNode);
 
         if (controlsNode === null) {
             console.warn('Could not find controls container');
             return null;
         }
-
-        // Create button container
-        /* const container = document.createElement('div');
-        container.id = 'ss-youtube-container';
-        // Create inner container(to enable CSS hack for a perfect square shape)
-        const innerContainer = document.createElement('div');
-        const toggle = document.createElement('img');
-        toggle.src = chrome.runtime.getURL('images/icon.png');
-        // Construct elements
-        innerContainer.appendChild(toggle);
-        container.appendChild(innerContainer); */
 
         const button = document.createElement('button');
         button.id = 'ss-youtube-container';
@@ -128,7 +127,7 @@ const toggleAttacher = {
             return;
         }
 
-        toggleAttacher.addToggleListener(button);
+        toggleAttacher.addToggleListener(button, video);
         controlsNode.prepend(button);
 
         return button;
@@ -159,7 +158,7 @@ const toggleAttacher = {
                 toggleOnClick(e);
             }
         }); */
-        toggleAttacher.addToggleListener(container);
+        toggleAttacher.addToggleListener(container, video);
         // Video nodes can't contain elements, place it adjacent to the video
         // video.appendChild(container);
         video.parentNode.insertBefore(container, video.nextSibling);
@@ -167,15 +166,27 @@ const toggleAttacher = {
         return container;
     },
 
-    addToggleListener: (toggle) => {
-        toggle.addEventListener('click', toggleOnClick, false);
+    addToggleListener: (toggle, video) => {
+        // Set the lastToggled to true or false
+        // Used when loading a new page to figure out to default to toggle = true or
+        // toggle = false. A user that leaves a page with a certain toggle state
+        // expects the new page to maintain that state
+        toggle.addEventListener('click', (e) => toggleAttacher.toggleOnClick(e, video), false);
     },
-};
 
-const toggleOnClick = (e) => {
-    console.log('Toggle click', e);
-    e.stopPropagation();
-    e.preventDefault();
+    toggleOnClick: (e, video) => {
+        console.log('Toggle click');
+        const attachData = inspected.get(video);
+        // Stop further propagation
+        // To prevent a click on the video underneath
+        e.stopPropagation();
+        e.preventDefault();
+
+        attachData.filterer.set.call(attachData.filterer, !attachData.toggled);
+        chrome.storage.sync.set({ lastToggled: !attachData.toggled });
+        // Update attach data
+        mapAppend(inspected, attachData.video, { toggled: !attachData.toggled });
+    },
 };
 
 const videoAttacher = {
@@ -254,7 +265,9 @@ const videoAttacher = {
             attributeOldValue: true,
         });
 
-        filterer.init(video, renderCanvas);
+        // Start displaying over the source video
+        const attachData = inspected.get(video);
+        attachData.filterer.init(video, renderCanvas);
     },
 
     requestVideoPositioning: (video, renderCanvas) => {
@@ -398,9 +411,37 @@ const glSources = {
     },
 };
 
+// Rewrite as a class, since there can be multiple instances
 // See https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial/Animating_textures_in_WebGL
-const filterer = {
-    getShaders: function(gl) {
+class Filterer {
+    constructor() {
+        this.video = null;                  // Set after init
+        this.renderCanvas = null;           // Set after init
+        this.gl = null;                     // Set after init
+        this.copyVideo = false;             // Is set when frame data can be read from the video
+        this.animationReq = null;
+        this.config = null;                 // The right program config has to be loaded in init
+    }
+
+    set(value) {
+        console.log('Filterer got set', value);
+        
+        if (value === true) {
+            this.showCanvas();
+        } else {
+            this.hideCanvas();
+        }
+        
+        if (value === true && this.animationReq === null && this.config !== null) {
+            this.animationReq = requestAnimationFrame(this.render.bind(this));
+        } else if (this.animationReq !== null) {
+            // The filter has been toggled off
+            cancelAnimationFrame(this.animationReq);
+            this.animationReq = null;
+        }
+    }
+
+    getShaders(gl) {
         // Compile each shader program based on its sources
         // Return a program config containing the compiled program along with
         // attribute- and uniform locations
@@ -442,18 +483,30 @@ const filterer = {
                 },
             },
         };
-    },
+    }
 
-    init: function(video, renderCanvas) {
-        console.log('Initializing filterer', video, renderCanvas);
+    showCanvas() {
+        this.renderCanvas.style.visibility = 'visible';
+        this.video.style.visibility = 'hidden';
+    }
+    
+    hideCanvas() {
+        this.renderCanvas.style.visibility = 'hidden';
+        this.video.style.visibility = 'visible';
+    }
+
+    init(video, renderCanvas) {
+        console.log('Initializing filterer');
         this.video = video;
         this.renderCanvas = renderCanvas;
+        this.hideCanvas();
 
         const gl = this.renderCanvas.getContext('webgl');
 
         if (gl === null || gl === undefined) {
             console.warn('Could not initialize WebGL');
         }
+        this.gl = gl;
 
         // Since the script execution time compared to the video's load time
         // might be a bit different; listen to both playing(video just started playing)
@@ -484,13 +537,13 @@ const filterer = {
             self.copyVideo = false;
         }, true);
 
-        this.configs = this.getShaders(gl);
-        this.buffers = this.initBuffers(gl);
-        this.texture = this.initTexture(gl);
+        this.configs = this.getShaders(this.gl);
+        this.buffers = this.initBuffers(this.gl);
+        this.texture = this.initTexture(this.gl);
 
         chrome.storage.onChanged.addListener((changes, namespace) => {
             console.log('chrome.storage.onChanged', changes, namespace);
-            for (key in changes) {
+            for (const key in changes) {
                 if (key === 'renderMode') {
                     // Change config
                     // New value available at changes[renderMode].newValue
@@ -515,13 +568,13 @@ const filterer = {
 
                     console.log('Retrieved renderMode. Applying', result.renderMode);
                     self.config = self.configs[result.renderMode];
-                    requestAnimationFrame((timestamp) => self.render(timestamp, gl));
+                    self.set(lastToggled);
                 });
             }
          });
-    },
+    }
 
-    initBuffers: function(gl) {
+    initBuffers(gl) {
         // Create a buffer to put three 2d clip space points in
         const positionBuffer = gl.createBuffer();
 
@@ -554,9 +607,9 @@ const filterer = {
             position: positionBuffer,
             textureCoord: textureCoordBuffer,
         };
-    },
+    }
 
-    initTexture: function(gl) {
+    initTexture(gl) {
         const texture = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, texture);
       
@@ -581,29 +634,32 @@ const filterer = {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       
         return texture;
-    },
+    }
 
-    updateTexture: function (gl, texture, video) {
+    updateTexture (gl, texture, video) {
         const level = 0;
         const internalFormat = gl.RGBA;
         const srcFormat = gl.RGBA;
         const srcType = gl.UNSIGNED_BYTE;
         gl.bindTexture(gl.TEXTURE_2D, texture);
         gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, srcFormat, srcType, video);
-    },
+    }
 
-    render: function(timestamp, gl) {
+    render(timestamp) {
         if (this.copyVideo === true) {
-            this.updateTexture(gl, this.texture, this.video);
+            this.updateTexture(this.gl, this.texture, this.video);
         }
 
-        // Depending on the value of the render mode the config should be changed
-        this.drawScene(gl, this.config, this.buffers, this.texture);
+        // Ensure that the render mode config has been loaded
+        if (this.config !== null) {
+            // Depending on the value of the render mode the config should be changed
+            this.drawScene(this.gl, this.config, this.buffers, this.texture);
+        }
 
-        requestAnimationFrame((timestamp) => this.render(timestamp, gl));
-    },
+        this.animationReq = requestAnimationFrame(this.render.bind(this));
+    }
 
-    drawScene: function(gl, programConfig, buffers, texture) {
+    drawScene(gl, programConfig, buffers, texture) {
         // Clear the canvas
         gl.clearColor(0, 0, 0, 0);
         gl.clear(gl.COLOR_BUFFER_BIT);
@@ -667,12 +723,12 @@ const filterer = {
         const offset = 0;
         const count = 4;
         gl.drawArrays(primitiveType, offset, count);
-    },
+    }
 
     /**
      * Initialize a shader program, so WebGL knows how to draw our data.
      */
-    initShaderProgram: function(gl, vsSource, fsSource) {
+    initShaderProgram(gl, vsSource, fsSource) {
         const vertexShader = this.loadShader(gl, gl.VERTEX_SHADER, vsSource);
         const fragmentShader = this.loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
     
@@ -689,13 +745,13 @@ const filterer = {
         }
     
         return shaderProgram;
-    },
+    }
 
     /**
      * Creates a shader of the given type, uploads the source and
      * compiles it.
      */
-    loadShader: function(gl, type, source) {
+    loadShader(gl, type, source) {
         const shader = gl.createShader(type);
     
         // Send the source to the shader object
@@ -712,8 +768,8 @@ const filterer = {
         }
     
         return shader;
-    },
-};
+    }
+}
 
 // Maybe it's possible to set top, left, bottom, right exactly
 // knowing the relative parent and the video node
@@ -835,6 +891,7 @@ const mapAppend = (map, key, properties) => {
 // DOM references
 // Therefore I can use a WeakMap and have a DOM element as key
 /**
+ * inspected:
  * [videoNode]: {
  *  video,
  *  toggle,
@@ -843,10 +900,7 @@ const mapAppend = (map, key, properties) => {
  */
 const inspected = new WeakMap();
 
-// TODO: Make a toggle boolean for each video node that's toggleable through the button
-// Will make it easier to see framerate differences caused by image manipulations
-
-// TODO: For some reason the toggle button attaches as an overlay on YouTube
+// For some reason the toggle button attaches as an overlay on YouTube
 // if you open the YouTube link in another tab
 // However, it works as expected if you open the link within the same active tab
 // It's because YouTube loads a "skeleton player" before it loads the page's content
@@ -854,13 +908,12 @@ const inspected = new WeakMap();
 // The "skeleton player" doesn't have any real unique ids or classes to search for
 // You can either rely on the page's URL or observe added elements
 
-// Rely on page's URL: Simple solution
-// Observe added elements: Harder to do because you have to remove the existing
-// toggle and re-add it if the player turns out to be "known"
-
-// I'm going with the "observe added elements" solution as removing
-// an existing toggle will be quite easy since the toggle button
-// will be referenced within 'inspected'
+// Interestingly, the ytd-player element with id 'ytd-player' isn't
+// recognized by MutationObservers
+// What I did was to look closer into how SponsorBlock, another extension,
+// applied their YouTube buttons to a video page. They relied on 'ytp-right-controls'
+// which is also available for me on window load
+// See https://github.com/ajayyy/SponsorBlock
 
 // Continue monitering the DOM for changes, in particular, additions of video nodes
 const videoObserver = new MutationObserver((mutations) => {
@@ -874,69 +927,9 @@ const videoObserver = new MutationObserver((mutations) => {
     });
 });
 
-// Only observing for YouTube player changes
-// Might need refactoring if more "known" players are added
-const playerObserver = new MutationObserver((mutations) => {
-    if (mutations.length > 0) {
-        // console.log('playerObserver mutations', mutations.map((m) => m.addedNodes));
-    }
-    mutations.forEach((mutation) => {
-        if (mutation.target.tagName === 'YTD-APP') {
-            console.log('suwooo');
-        }
-
-        if (mutation.target.tagName === 'YTD-PLAYER') {
-            console.log('suwooooooooooooooooooooo');
-            console.log('real shit', mutation);
-        }
-
-        // console.log('mutation type shit');
-        if (mutation.attributeName === 'id' && mutation.target.id === 'ytd-player') {
-            console.log('Detected mutation; recognized new player id');
-            // Reimplement toggle button as YouTube player button
-            // See if any inspected video nodes are within the target's container
-            toggleAttacher.reattachToPlayer(
-                mutation.target,
-                toggleAttacher.attachYouTube.bind(mutation.target),
-            );
-        }
-        
-        const addedNodes = [ ...mutation.addedNodes ];          // Converted to array for simplicity
-        // console.log('playerObserver addedNodes', addedNodes);
-        if (addedNodes.some((node) => node.id === 'ytd-player')) {
-            console.log('Detected mutation; player added');
-            // Reimplement toggle button as YouTube player button
-            // See if any inspected video nodes are within the newly created player
-            toggleAttacher.reattachToPlayer(
-                mutation.target,
-                toggleAttacher.attachYouTube.bind(mutation.target),
-            );
-        }
-
-        if (addedNodes.some((node) => node.tagName === 'YTD-APP')) {
-            console.log('addedNode: suwooo');
-        }
-
-        if (addedNodes.some((node) => node.tagName === 'YTD-PLAYER')) {
-            console.log('addedNode: suwooooooooooooooooooooo');
-        }
-    });
-});
-
-// FIXME: For some reason YouTube first loads a div with id 'player', a type of skeleton
-// Then it loads ytd-app where the actual player resides
-
-// Start running the script by analysing the current DOM for video nodes
-// findVideoNodes();
 window.onload = () => {
     console.log('find_video_content_script.js window onload');
     findVideoNodes();
+    // Observe if new videos are added
     videoObserver.observe(document, { childList: true, subtree: true });
-    // Note the observer order. Analyze and register new video nodes first
-    // before checking for "known" added players
-    // The player observer recognizes players and re-attaches the toggle button
-    // to affected videos(video nodes within the player) hence the explicit order
 };
-
-// console.log('playerObserver register');
-// playerObserver.observe(document, { childList: true, attributes: true, attributeFilter: ['id'], subtree: true });
