@@ -4,14 +4,45 @@
         <script src="configuration.js" type="text/javascript"></script>
     </head>
     <body>
-        <h1>Configuration window</h1>
+        <h1>Second Sun</h1>
         <form name="modePicker">
-            <input type="radio" id="invert" name="mode" value="invert">
+            <h4>Pick a filter mode:</h4>
+            <!-- <input type="radio" id="invert" name="mode" value="invert">
             <label for="invert">Invert</label><br>
             <input type="radio" id="dampen" name="mode" value="dampen">
             <label for="dampen">Dampen</label><br>
             <input type="radio" id="darken" name="mode" value="darken">
-            <label for="darken">Darken</label>
+            <label for="darken">Darken</label> -->
+            <div class="container" title="Invert brightest with the darkest colors">
+                <input type="radio" id="invert" name="mode" value="invert">
+                <span class="checkmark">
+                    <span class="hollow"></span>
+                </span>
+                <label for="invert">Invert</label>
+            </div>
+            
+            <div class="container" title="Dampen brightest colors">
+                <input type="radio" id="dampen" name="mode" value="dampen">
+                <span class="checkmark">
+                    <span class="hollow"></span>
+                </span>
+                <label for="dampen">Dampen</label>
+            </div>
+            
+            <div class="container" title="Turn down brightness for all colors">
+                <input type="radio" id="darken" name="mode" value="darken">
+                <span class="checkmark">
+                    <span class="hollow"></span>
+                </span>
+                <label for="darken">Darken</label>
+            </div>
         </form>
+
+        <div class="divider"></div>
+        <div id="footer">
+            <a href="https://github.com/AndreasWJ/secondsun" target="_blank"><h4>GitHub</h4></a>
+            <a href="https://github.com/AndreasWJ/secondsun/tree/master/about.txt" target="_blank"><h4>About</h4></a>
+            <a href="https://github.com/AndreasWJ" target="_blank"><h4>Developed By</h4></a>
+        </div>
     </body>
 </html>

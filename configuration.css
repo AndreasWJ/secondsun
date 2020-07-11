@@ -1,0 +1,204 @@
+body {
+    /* background-color: #292629; */
+    background-color: #211f21;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+}
+
+h1 {
+    word-wrap: none;
+    white-space: nowrap;
+    color: #f4f4f4;
+    padding-left: 2rem;
+    padding-right: 2rem;
+    /* margin-block-start: 0; */
+    margin-block-end: 0;
+}
+
+a {
+    color: inherit;
+    text-decoration: none; /* no underline */
+    transition: 0.3s;
+}
+
+a:hover {
+    color: #f4f4f4;
+}
+
+form {
+    padding-left: 0.6rem;
+    padding-right: 0.6rem;
+}
+
+label {
+    color: #655f65;
+    transition: 0.3s;
+}
+
+label:hover {
+    color: #f4f4f4;
+}
+
+/* The container */
+.container {
+    display: block;
+    position: relative;
+    padding-left: 35px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    font-size: 14px;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* Hide the browser's default radio button */
+.container input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+}
+
+/* Create a custom radio button */
+.checkmark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 18px;
+    width: 18px;
+    background-color: #4c4c4c;
+    border-radius: 50%;
+    -webkit-box-shadow: 0px 5px 6px 1px rgba(0,0,0,0.1);
+    -moz-box-shadow: 0px 5px 6px 1px rgba(0,0,0,0.1);
+    box-shadow: 0px 5px 6px 1px rgba(0,0,0,0.1);
+    transition: 0.3s;
+}
+
+.hollow {
+    position: absolute;
+    height: 14px;
+    width: 14px;
+    background-color: #211f21;
+    border-radius: 50%;
+    top: 2px;
+    left: 2px;
+}
+
+/* On mouse-over, add a grey background color */
+.container:hover input ~ .checkmark {
+    background: #61005c;  /* fallback for old browsers */
+    background: -webkit-linear-gradient(80deg, #0eafbe, #61005c);
+    background: linear-gradient(80deg, #0eafbe, #61005c);
+    background-size: 150% 150%;
+	animation: gradient 12s ease infinite;
+}
+
+/* When the radio button is checked, add a blue background */
+.container:nth-of-type(1) input:checked ~ .checkmark {
+    background: #61005c;  /* fallback for old browsers */
+    background: -webkit-linear-gradient(80deg, #0eafbe, #61005c);
+    background: linear-gradient(80deg, #0eafbe, #61005c);
+    background-size: 150% 150%;
+	animation: gradient 12s ease infinite;
+}
+
+.container:nth-of-type(2) input:checked ~ .checkmark {
+    background: #61005c;  /* fallback for old browsers */
+    background: -webkit-linear-gradient(80deg, #61005c, #0eafbe);
+    background: linear-gradient(80deg, #61005c, #0eafbe);
+    background-size: 200% 200%;
+	animation: gradient 10s ease infinite;
+}
+
+.container:nth-of-type(3) input:checked ~ .checkmark {
+    background: #61005c;  /* fallback for old browsers */
+    background: -webkit-linear-gradient(80deg, #0eafbe, #61005c);
+    background: linear-gradient(80deg, #0eafbe, #61005c);
+    background-size: 250% 250%;
+	animation: gradient 11s ease infinite;
+}
+
+.container label {
+    cursor: pointer;
+}
+
+/* TODO: Gör om HTML strukturen, lägg label bredvid input */
+.container input:checked ~ label {
+    color: #f4f4f4;
+}
+
+/* Create the indicator (the dot/circle - hidden when not checked) */
+.checkmark:after {
+    content: "";
+    position: absolute;
+    display: none;
+}
+
+/* Show the indicator (dot/circle) when checked */
+.container input:checked ~ .checkmark:after {
+    display: block;
+}
+
+/* Style the indicator (dot/circle) */
+.container .checkmark:after {
+    top: 5px;
+    left: 5px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    /* background-color: #7c6e7c; */
+    background: #61005c;  /* fallback for old browsers */
+    background: -webkit-linear-gradient(80deg, #61005c, #0eafbe);
+    background: linear-gradient(80deg, #61005c, #0eafbe);
+    background-size: 200% 200%;
+	animation: gradient 10s ease infinite, scale-in 0.3s ease-in-out;
+}
+
+.divider {
+    width: 100%;
+    height: 1px;
+    background: #360033;  /* fallback for old browsers */
+    background: -webkit-linear-gradient(to right, #0b8793, #360033);
+    background: linear-gradient(to right, #0b8793, #360033);
+    background-size: 250% 250%;
+	animation: gradient 15s ease infinite;
+}
+
+@keyframes gradient {
+	0% {
+		background-position: 0% 50%;
+	}
+	50% {
+		background-position: 100% 50%;
+	}
+	100% {
+		background-position: 0% 50%;
+	}
+}
+
+@keyframes scale-in {
+    0% {
+        transform: scale(0);
+    }
+
+    90% {
+        transform: scale(1.1);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+#footer {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-evenly;
+    align-items: center;
+}
+
+h4 {
+    color: #655f65;
+}
