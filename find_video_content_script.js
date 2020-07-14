@@ -68,9 +68,7 @@ const toggleAttacher = {
         }
 
         // Update the inspected map with a referenced to the created toggle button
-        toggleAttacher.getDefaultState((toggleState) => {
-            mapAppend(inspected, video, { toggle, toggled: toggleState });
-        });
+        mapAppend(inspected, video, { toggle });
     },
 
     getDefaultState: (cb) => {
@@ -97,9 +95,6 @@ const toggleAttacher = {
     /**
      * Create checkbox toggle. Apply gradient background when checked.
      * Animate transparent icon by scaling down when checked.
-     * TODO: Replace toggle button with toggle checkbox.
-     * Remove toggled state in inspected and rely on local checked state.
-     * TODO: Put label container inside gradient background div.
      */
     createToggle: (containerId) => {
         const container = document.createElement('div');
@@ -181,17 +176,8 @@ const toggleAttacher = {
 
     attachDefault: (video) => {
         console.log('Attaching default toggle button', video);
-        // Create button container
-        /* const container = document.createElement('div');
-        container.id = 'ss-default-container';
-        // Create inner container(to enable CSS hack for a perfect square shape)
-        const innerContainer = document.createElement('div');
-        const toggle = document.createElement('img');
-        toggle.src = chrome.runtime.getURL('images/Icon.png');
-        // Construct elements
-        innerContainer.appendChild(toggle);
-        container.appendChild(innerContainer); */
 
+        // CSS class 'ss-default-container' applies position styling
         const toggle = toggleAttacher.createToggle('ss-default-container');
 
         // Ensure that a container has not yet already been injected
@@ -266,10 +252,8 @@ const toggleAttacher = {
         e.stopPropagation();
         e.preventDefault();
 
-        attachData.filterer.set.call(attachData.filterer, !attachData.toggled);
-        chrome.storage.sync.set({ lastToggled: !attachData.toggled });
-        // Update attach data
-        mapAppend(inspected, attachData.video, { toggled: !attachData.toggled });
+        attachData.filterer.set.call(attachData.filterer, checked);
+        chrome.storage.sync.set({ lastToggled: checked });
     },
 };
 
@@ -982,12 +966,14 @@ const mapAppend = (map, key, properties) => {
 // to the collection. It has nothing to do with static
 // DOM references
 // Therefore I can use a WeakMap and have a DOM element as key
+
+// Removed toggled from inspected state. It's available as local state
+// within the toggle's input checkbox
 /**
  * inspected:
  * [videoNode]: {
  *  video,
  *  toggle,
- *  toggled,
  * }
  */
 const inspected = new WeakMap();
