@@ -111,16 +111,14 @@ const toggleAttacher = {
         toggle.setAttribute('for', 'ss-checkbox');
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
-        // TODO: Remove name and value if not needed
-        checkbox.name = 'toggled';
-        checkbox.value = 'ss-toggled';
         checkbox.id = 'ss-checkbox';
         // Set checkbox default value to lastToggled
         toggleAttacher.getDefaultState((toggleState) => {
             console.log('toggleState got default value', toggleState);
             checkbox.checked = toggleState;
 
-            // Add active style class
+            // Add active style class. I.e if the checkbox is checked initally apply
+            // the "active" class
             toggleAttacher.applyStateStyle(toggleState, checkbox, gradientBackground);
         });
         toggle.appendChild(checkbox);
@@ -229,14 +227,18 @@ const toggleAttacher = {
         };
 
         if (checked) {
-            console.log('Checkbox set to true');
+            console.log('Styling checkbox according to true');
             gradient.classList.add('ss-toggle-gradient-background-animate-in');
         } else {
-            console.log('Checkbox set to false');
-            gradient.classList.remove('ss-toggle-gradient-background-animate-in');
+            console.log('Styling checkbox according to false');
+            // Only animate "out" if the element has animated in
+            // Will prevent cases where the page loads and the element is animated out on load
+            if (gradient.classList.contains('ss-toggle-gradient-background-animate-in')) {
+                gradient.classList.remove('ss-toggle-gradient-background-animate-in');
 
-            gradient.classList.add('ss-toggle-gradient-background-animate-out');
-            gradient.addEventListener('animationend', animatedOut);
+                gradient.classList.add('ss-toggle-gradient-background-animate-out');
+                gradient.addEventListener('animationend', animatedOut);
+            }
         }
     },
 
