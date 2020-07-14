@@ -1,6 +1,10 @@
 // Decides the default filterer toggle for this page based on
 // what's toggled on previous pages
 let lastToggled = null;
+// Keeps track of the number of recognized video nodes
+// Is used to assign a unique id to each video's checkbox input
+// This id is also referenced in the video's inspected entry
+let numberOfNodes = 0;
 
 const findVideoNodes = () => {
     // Returns a static NodeList, i.e further DOM changes won't be reflected in the list
@@ -16,7 +20,7 @@ const findVideoNodes = () => {
     addStylesheet();                // Stylesheet is only added once even if called multiple times
     videoNodes.forEach((node) => {
         if (node !== undefined && !inspected.has(node)) {
-            inspected.set(node, { video: node, toggle: null, filterer: new Filterer() });
+            inspected.set(node, { id: numberOfNodes++, video: node, toggle: null, filterer: new Filterer() });
             attach(node);
         }
     });
@@ -92,13 +96,18 @@ const toggleAttacher = {
         });
     },
 
+    getCheckboxId: (toggleId) => {
+        return `ss-checkbox-${toggleId}`;
+    },
+
     /**
      * Create checkbox toggle. Apply gradient background when checked.
      * Animate transparent icon by scaling down when checked.
      */
-    createToggle: (containerId) => {
+    createToggle: (containerType, toggleId) => {
+        console.log('Creating toggle with toggleId', toggleId);
         const container = document.createElement('div');
-        container.id = containerId;
+        container.classList.add(containerType);
         // Create the animated gradient background, animated in on check
         const gradientBackground = document.createElement('div');
         gradientBackground.classList.add('ss-toggle-gradient-background');
@@ -106,12 +115,12 @@ const toggleAttacher = {
         // Apply default toggle design
         // Create inner container
         const toggle = document.createElement('label');
-        toggle.id = 'ss-toggle';
+        toggle.classList.add('ss-toggle');
         // The 'for' attribute must match the checkboxes id! Not value or name or anything else
-        toggle.setAttribute('for', 'ss-checkbox');
+        toggle.setAttribute('for', toggleAttacher.getCheckboxId(toggleId));
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
-        checkbox.id = 'ss-checkbox';
+        checkbox.id = toggleAttacher.getCheckboxId(toggleId);
         // Set checkbox default value to lastToggled
         toggleAttacher.getDefaultState((toggleState) => {
             console.log('toggleState got default value', toggleState);
@@ -128,16 +137,16 @@ const toggleAttacher = {
         toggle.appendChild(buttonImage);
 
         const toggleContainer = document.createElement('div');
-        toggleContainer.id = 'ss-toggle-container';
+        toggleContainer.classList.add('ss-toggle-container');
         toggleContainer.appendChild(gradientBackground);
         toggleContainer.appendChild(toggle);
 
         const innerContainer = document.createElement('div');
-        innerContainer.id = 'ss-inner-youtube-container';
+        innerContainer.classList.add('ss-inner-youtube-container');
         innerContainer.appendChild(toggleContainer);
 
         const bigInner = document.createElement('div');
-        bigInner.id = 'ss-big-inner-youtube-container';
+        bigInner.classList.add('ss-big-inner-youtube-container');
         bigInner.appendChild(innerContainer);
 
         container.appendChild(bigInner);
@@ -157,16 +166,16 @@ const toggleAttacher = {
             return null;
         }
 
-        const toggle = toggleAttacher.createToggle('ss-youtube-container');
+        const toggle = toggleAttacher.createToggle('ss-youtube-container', inspected.get(video).id);
         toggle.classList.add('playerButton', 'ytp-button');
 
         // Ensure that a container has not yet already been injected
-        if (controlsNode.querySelector('#ss-youtube-container') !== null) {
+        if (controlsNode.querySelector('.ss-youtube-container') !== null) {
             console.log('Toggle container already in DOM');
             return;
         }
 
-        toggleAttacher.addToggleListener(toggle, video);
+        toggleAttacher.addToggleListener(toggle, video, inspected.get(video).id);
         controlsNode.prepend(toggle);
 
         return toggle;
@@ -176,10 +185,10 @@ const toggleAttacher = {
         console.log('Attaching default toggle button', video);
 
         // CSS class 'ss-default-container' applies position styling
-        const toggle = toggleAttacher.createToggle('ss-default-container');
+        const toggle = toggleAttacher.createToggle('ss-default-container', inspected.get(video).id);
 
         // Ensure that a container has not yet already been injected
-        if (video.nextSibling && video.nextSibling.id === 'ss-default-container') {
+        if (video.nextSibling && video.nextSibling.classList.contains('ss-default-container')) {
             console.log('Toggle container already in DOM');
             return;
         }
@@ -190,7 +199,7 @@ const toggleAttacher = {
                 toggleOnClick(e);
             }
         }); */
-        toggleAttacher.addToggleListener(toggle, video);
+        toggleAttacher.addToggleListener(toggle, video, inspected.get(video).id);
         // Video nodes can't contain elements, place it adjacent to the video
         // video.appendChild(container);
         video.parentNode.insertBefore(toggle, video.nextSibling);
@@ -198,21 +207,21 @@ const toggleAttacher = {
         return toggle;
     },
 
-    addToggleListener: (toggle, video) => {
+    addToggleListener: (toggle, video, toggleId) => {
         // Set the lastToggled to true or false
         // Used when loading a new page to figure out to default to toggle = true or
         // toggle = false. A user that leaves a page with a certain toggle state
         // expects the new page to maintain that state
         // toggle.addEventListener('click', (e) => toggleAttacher.toggleOnClick(e, video), false);
-        const checkbox = toggle.querySelector('#ss-checkbox');
+        const checkbox = toggle.querySelector(`#${toggleAttacher.getCheckboxId(toggleId)}`);
         checkbox.addEventListener('change', function (e) {
             console.log('addToggleListener change');
             toggleAttacher.toggleOnClick(e, video, this.checked);
         }, false);
     },
 
-    updateStyle: (checked, toggle) => {
-        const toggleCheckbox = toggle.querySelector('#ss-checkbox');
+    updateStyle: (checked, toggle, toggleId) => {
+        const toggleCheckbox = toggle.querySelector(`#${toggleAttacher.getCheckboxId(toggleId)}`);
         const toggleGradient = toggle.querySelector('.ss-toggle-gradient-background');
         toggleAttacher.applyStateStyle(checked, toggleCheckbox, toggleGradient);
     },
@@ -220,6 +229,7 @@ const toggleAttacher = {
     applyStateStyle: (checked, checkbox, gradient) => {
         console.log('toggleStyling', checked, checkbox, gradient);
 
+        // Named function. Needed to eventually remove the event listener
         const animatedOut = () => {
             console.log('toggle animationend');
             gradient.removeEventListener('animationend', animatedOut);
@@ -242,12 +252,12 @@ const toggleAttacher = {
         }
     },
 
-    // TODO: Make ids into classes in case there are multiple videos on a page?
+    // Make ids into classes in case there are multiple videos on a page
     // Yes. Elements can't exists within the same document with the same id
     toggleOnClick: (e, video, checked) => {
         console.log('Toggle click');
         const attachData = inspected.get(video);
-        toggleAttacher.updateStyle(checked, attachData.toggle);
+        toggleAttacher.updateStyle(checked, attachData.toggle, attachData.id);
 
         // Stop further propagation
         // To prevent a click on the video underneath
@@ -284,7 +294,7 @@ const videoAttacher = {
 
         // New approach with ResizeObserver to accommodate for videos in absolute positioning
         const renderCanvas = document.createElement('canvas');
-        renderCanvas.id = 'ss-render-canvas';
+        renderCanvas.classList.add('ss-render-canvas');
         video.parentNode.insertBefore(renderCanvas, video.nextSibling);
 
         // Detect size changes; change size and positioning of render canvas
@@ -971,9 +981,13 @@ const mapAppend = (map, key, properties) => {
 
 // Removed toggled from inspected state. It's available as local state
 // within the toggle's input checkbox
+
+// Added id, as a simple 0+ identifier for checkbox identification
+// Labels rely on input's id, which needs to be unique in a document
 /**
  * inspected:
  * [videoNode]: {
+ *  id,
  *  video,
  *  toggle,
  * }

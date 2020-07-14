@@ -1,4 +1,4 @@
-#ss-default-container {
+.ss-default-container {
     position: absolute;
     top: 0;
     right: 0;
@@ -16,13 +16,13 @@
     cursor: pointer;
 }
 
-#ss-default-container::after {
+.ss-default-container::after {
     content: "";
     display: block;
     padding-bottom: 100%;
 }
 
-#ss-render-canvas {
+.ss-render-canvas {
     position: absolute;
     top: 0;
     left: 0;
@@ -86,13 +86,13 @@
     }
 }
 
-#ss-toggle-container {
+.ss-toggle-container {
     position: absolute;
     width: 100%;
     height: 100%;
 }
 
-#ss-toggle {
+.ss-toggle {
     display: flex;
     justify-content: center;
     align-items: center;
@@ -103,7 +103,7 @@
     left: 0;
 }
 
-#ss-toggle > input {
+.ss-toggle > input {
     /* Hide native checkbox design */
     opacity: 0;
     width: 0;
@@ -113,27 +113,23 @@
     transition: all 300ms 0ms ease-in-out;
 }
 
-#ss-toggle img {
+.ss-toggle img {
     display: block;
     width: 100%
 }
 
-#ss-inner-container {
-    height: 60%;
-}
-
-#ss-inner-youtube-container {
+.ss-inner-youtube-container {
     width: 60%;
     position: relative;
 }
 
-#ss-inner-youtube-container::after {
+.ss-inner-youtube-container::after {
     content: "";
     display: block;
     padding-bottom: 100%;
 }
 
-#ss-big-inner-youtube-container {
+.ss-big-inner-youtube-container {
     width: 100%;
     height: 100%;
     display: flex;
