@@ -68,11 +68,7 @@ const toggleAttacher = {
         }
 
         // Update the inspected map with a referenced to the created toggle button
-        // FIXME: toggleAttacher.getDefaultState() returns undefined
-        // const toggled = toggleAttacher.getDefaultState();
         toggleAttacher.getDefaultState((toggleState) => {
-            // const attachData = inspected.get(video);
-            // attachData.filterer.set(toggleState);
             mapAppend(inspected, video, { toggle, toggled: toggleState });
         });
     },
@@ -80,8 +76,7 @@ const toggleAttacher = {
     getDefaultState: (cb) => {
         if (lastToggled !== null) {
             console.log('Found default toggle state', lastToggled);
-            // return lastToggled;
-            cb(lastToggled);
+            return cb(lastToggled);
         }
 
         // Retrieve the lastToggled value from storage
@@ -95,9 +90,66 @@ const toggleAttacher = {
                 lastToggled = result.lastToggled;
             }
 
-            // return lastToggled;
-            cb(lastToggled);
+            return cb(lastToggled);
         });
+    },
+
+    /**
+     * Create checkbox toggle. Apply gradient background when checked.
+     * Animate transparent icon by scaling down when checked.
+     * TODO: Replace toggle button with toggle checkbox.
+     * Remove toggled state in inspected and rely on local checked state.
+     * TODO: Put label container inside gradient background div.
+     */
+    createToggle: (containerId) => {
+        const container = document.createElement('div');
+        container.id = containerId;
+        // Create the animated gradient background, animated in on check
+        const gradientBackground = document.createElement('div');
+        gradientBackground.classList.add('ss-toggle-gradient-background');
+
+        // Apply default toggle design
+        // Create inner container
+        const toggle = document.createElement('label');
+        toggle.id = 'ss-toggle';
+        // The 'for' attribute must match the checkboxes id! Not value or name or anything else
+        toggle.setAttribute('for', 'ss-checkbox');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        // TODO: Remove name and value if not needed
+        checkbox.name = 'toggled';
+        checkbox.value = 'ss-toggled';
+        checkbox.id = 'ss-checkbox';
+        // Set checkbox default value to lastToggled
+        toggleAttacher.getDefaultState((toggleState) => {
+            console.log('toggleState got default value', toggleState);
+            checkbox.checked = toggleState;
+
+            // Add active style class
+            toggleAttacher.applyStateStyle(toggleState, checkbox, gradientBackground);
+        });
+        toggle.appendChild(checkbox);
+
+        const buttonImage = document.createElement('img');
+        buttonImage.src = chrome.runtime.getURL('images/IconTransparent.png');
+        toggle.appendChild(buttonImage);
+
+        const toggleContainer = document.createElement('div');
+        toggleContainer.id = 'ss-toggle-container';
+        toggleContainer.appendChild(gradientBackground);
+        toggleContainer.appendChild(toggle);
+
+        const innerContainer = document.createElement('div');
+        innerContainer.id = 'ss-inner-youtube-container';
+        innerContainer.appendChild(toggleContainer);
+
+        const bigInner = document.createElement('div');
+        bigInner.id = 'ss-big-inner-youtube-container';
+        bigInner.appendChild(innerContainer);
+
+        container.appendChild(bigInner);
+
+        return container;
     },
 
     /**
@@ -112,14 +164,8 @@ const toggleAttacher = {
             return null;
         }
 
-        const button = document.createElement('button');
-        button.id = 'ss-youtube-container';
-        // YouTube specific classes
-        button.classList.add('playerButton', 'ytp-button');
-        const buttonImage = document.createElement('img');
-        buttonImage.src = chrome.runtime.getURL('images/IconTransparent.png');
-        buttonImage.classList.add('playerButtonImage');
-        button.appendChild(buttonImage);
+        const toggle = toggleAttacher.createToggle('ss-youtube-container');
+        toggle.classList.add('playerButton', 'ytp-button');
 
         // Ensure that a container has not yet already been injected
         if (controlsNode.querySelector('#ss-youtube-container') !== null) {
@@ -127,16 +173,16 @@ const toggleAttacher = {
             return;
         }
 
-        toggleAttacher.addToggleListener(button, video);
-        controlsNode.prepend(button);
+        toggleAttacher.addToggleListener(toggle, video);
+        controlsNode.prepend(toggle);
 
-        return button;
+        return toggle;
     },
 
     attachDefault: (video) => {
         console.log('Attaching default toggle button', video);
         // Create button container
-        const container = document.createElement('div');
+        /* const container = document.createElement('div');
         container.id = 'ss-default-container';
         // Create inner container(to enable CSS hack for a perfect square shape)
         const innerContainer = document.createElement('div');
@@ -144,7 +190,9 @@ const toggleAttacher = {
         toggle.src = chrome.runtime.getURL('images/Icon.png');
         // Construct elements
         innerContainer.appendChild(toggle);
-        container.appendChild(innerContainer);
+        container.appendChild(innerContainer); */
+
+        const toggle = toggleAttacher.createToggle('ss-default-container');
 
         // Ensure that a container has not yet already been injected
         if (video.nextSibling && video.nextSibling.id === 'ss-default-container') {
@@ -158,12 +206,12 @@ const toggleAttacher = {
                 toggleOnClick(e);
             }
         }); */
-        toggleAttacher.addToggleListener(container, video);
+        toggleAttacher.addToggleListener(toggle, video);
         // Video nodes can't contain elements, place it adjacent to the video
         // video.appendChild(container);
-        video.parentNode.insertBefore(container, video.nextSibling);
+        video.parentNode.insertBefore(toggle, video.nextSibling);
 
-        return container;
+        return toggle;
     },
 
     addToggleListener: (toggle, video) => {
@@ -171,12 +219,48 @@ const toggleAttacher = {
         // Used when loading a new page to figure out to default to toggle = true or
         // toggle = false. A user that leaves a page with a certain toggle state
         // expects the new page to maintain that state
-        toggle.addEventListener('click', (e) => toggleAttacher.toggleOnClick(e, video), false);
+        // toggle.addEventListener('click', (e) => toggleAttacher.toggleOnClick(e, video), false);
+        const checkbox = toggle.querySelector('#ss-checkbox');
+        checkbox.addEventListener('change', function (e) {
+            console.log('addToggleListener change');
+            toggleAttacher.toggleOnClick(e, video, this.checked);
+        }, false);
     },
 
-    toggleOnClick: (e, video) => {
+    updateStyle: (checked, toggle) => {
+        const toggleCheckbox = toggle.querySelector('#ss-checkbox');
+        const toggleGradient = toggle.querySelector('.ss-toggle-gradient-background');
+        toggleAttacher.applyStateStyle(checked, toggleCheckbox, toggleGradient);
+    },
+
+    applyStateStyle: (checked, checkbox, gradient) => {
+        console.log('toggleStyling', checked, checkbox, gradient);
+
+        const animatedOut = () => {
+            console.log('toggle animationend');
+            gradient.removeEventListener('animationend', animatedOut);
+            gradient.classList.remove('ss-toggle-gradient-background-animate-out');
+        };
+
+        if (checked) {
+            console.log('Checkbox set to true');
+            gradient.classList.add('ss-toggle-gradient-background-animate-in');
+        } else {
+            console.log('Checkbox set to false');
+            gradient.classList.remove('ss-toggle-gradient-background-animate-in');
+
+            gradient.classList.add('ss-toggle-gradient-background-animate-out');
+            gradient.addEventListener('animationend', animatedOut);
+        }
+    },
+
+    // TODO: Make ids into classes in case there are multiple videos on a page?
+    // Yes. Elements can't exists within the same document with the same id
+    toggleOnClick: (e, video, checked) => {
         console.log('Toggle click');
         const attachData = inspected.get(video);
+        toggleAttacher.updateStyle(checked, attachData.toggle);
+
         // Stop further propagation
         // To prevent a click on the video underneath
         e.stopPropagation();
@@ -433,6 +517,7 @@ class Filterer {
         }
         
         if (value === true && this.animationReq === null && this.config !== null) {
+            console.log('Set: Start rendering');
             this.animationReq = requestAnimationFrame(this.render.bind(this));
         } else if (this.animationReq !== null) {
             // The filter has been toggled off
@@ -499,7 +584,6 @@ class Filterer {
         console.log('Initializing filterer');
         this.video = video;
         this.renderCanvas = renderCanvas;
-        this.hideCanvas();
 
         const gl = this.renderCanvas.getContext('webgl');
 
@@ -526,14 +610,17 @@ class Filterer {
         // and 'WebGL: INVALID_VALUE: texImage2D: no video' may occur because
         // data can't be fetched when the video is paused, is buffering, or has ended
         video.addEventListener('pause', function() {
+            console.log('Detected pause, not updating texture');
             self.copyVideo = false;
         }, true);
-
+        
         video.addEventListener('waiting', function() {
+            console.log('Detected pause, not updating texture');
             self.copyVideo = false;
         }, true);
-
+        
         video.addEventListener('ended', function() {
+            console.log('Detected pause, not updating texture');
             self.copyVideo = false;
         }, true);
 
@@ -558,6 +645,8 @@ class Filterer {
             console.log('loadeddata: Video has loaded');
             // Video should now be loaded but we can add a second check
             if (video.readyState >= 3) {
+                console.log('video readyState >=, updating texture');
+                self.copyVideo = true;
                 // Block requestAnimationFrame call until the initial setting has been found
                 chrome.storage.sync.get(['renderMode'], function(result) {
                     // If result.renderMode is undefined then apply invert as default
@@ -568,7 +657,10 @@ class Filterer {
 
                     console.log('Retrieved renderMode. Applying', result.renderMode);
                     self.config = self.configs[result.renderMode];
-                    self.set(lastToggled);
+                    toggleAttacher.getDefaultState((toggleState) => {
+                        console.log('GL init. Setting with toggleState', toggleState);
+                        self.set(toggleState);
+                    });
                 });
             }
          });
