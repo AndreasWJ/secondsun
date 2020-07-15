@@ -46,12 +46,12 @@
 
 
 .ss-toggle-gradient-background-animate-in {
-    animation: scale-in 0.4s ease-in forwards;
+    animation: scale-in 0.25s ease-in forwards;
     animation-fill-mode: forwards;
 }
 
 .ss-toggle-gradient-background-animate-out {
-    animation: scale-out 0.5s ease-out forwards;
+    animation: scale-out 0.4s ease-out forwards;
 }
 
 @keyframes scale-in {

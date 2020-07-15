@@ -6,6 +6,8 @@ let lastToggled = null;
 // This id is also referenced in the video's inspected entry
 let numberOfNodes = 0;
 
+// TODO: Request CORS if the video is from a different origin
+// If not available, show a console warning and prevent filtering
 const findVideoNodes = () => {
     // Returns a static NodeList, i.e further DOM changes won't be reflected in the list
     console.log('Finding video nodes');
@@ -19,10 +21,103 @@ const findVideoNodes = () => {
 
     addStylesheet();                // Stylesheet is only added once even if called multiple times
     videoNodes.forEach((node) => {
-        if (node !== undefined && !inspected.has(node)) {
+        if (inspected.has(node) === false) {
+            checkVideoSources(node);
+            addSourceObserver(node);
             inspected.set(node, { id: numberOfNodes++, video: node, toggle: null, filterer: new Filterer() });
             attach(node);
         }
+    });
+};
+
+const checkVideoSources = (video) => {
+    // Check if CORS is needed
+    if (video.src !== '' && video.src !== undefined && video.src !== null) {
+        console.log('checkVideoSources: Requesting CORS for video');
+        requestCORS(video.src, video);
+    } else {
+        console.log('checkVideoSources: Checking children sources');
+        const sources = video.querySelectorAll('source');
+        sources.forEach((source) => requestCORS(source.src, video));
+    }
+};
+
+// FIXME: Invalid URL error
+// It is because the src is not defined at page load
+// TODO: What you have to do is to observe video nodes
+// Observe for video nodes' src attributes and potential
+// children(source tags)
+// Source tags often refer to a relative path so only
+// compare and request CORS if it's an absolute path
+const requestCORS = (path, video) => {
+    console.log('requestCORS path video.src', path, video.src);
+    console.log('requestCORS video', JSON.parse(JSON.stringify(video)));
+    if (shareOrigin(path) === false) {
+        // TODO: Send a HTTP request to the other origin with an attempted access with CORS
+        // If a fail response is received the extension cannot work. Show an error message
+        // if the user clicks the toggle button
+
+        // Works with 'anonymous'
+        // However, what happens if anonymous fails?
+        console.log('Origins does not match');
+        // Video and the page the extension is running on doesn't share origin
+        if (video.crossOrigin !== '') {
+            console.log('Video crossOrigin set to anonymous');
+            video.crossOrigin = '';
+        }
+    } else {
+        console.log('Origins match');
+    }
+};
+
+/**
+ * @param {string} path relative or absolute path to a resource.
+ */
+const shareOrigin = (path) => {
+    if (path.indexOf('http://') >= 0 || path.indexOf('https://') >= 0 ) {
+        // Path is absolute
+        if ((new URL(path)).origin === window.location.origin) {
+            return true;
+        } else {
+            return false;
+        }
+    } else {
+        // Path is relative, path and page must share origin
+        return true;
+    }
+};
+
+const addSourceObserver = (element) => {
+    const sourceObserver = new MutationObserver((mutations) => {
+        for (let mutation of mutations) {
+            // If 'src' is added or updated on the video or one of the sources
+            if (mutation.type === 'attributes' && mutation.attributeName === 'src') {
+                // Either the video received a source or one of the source tags
+                // Request CORS if the new src is an absolute path with a different origin
+                // There's no real documentation on the relationship between video and
+                // source tags if present in regards to CORS
+                // From the examples online it seems that crossOrigin should be set
+                // on the video element if one of the sources refers cross-domain
+                console.log('sourceObserver: Detected src mutation');
+                requestCORS(mutation.target.src, element);
+            } else if (mutation.type === 'childList') {
+                // A source was added or removed
+                mutation.addedNodes.forEach((source) => {
+                    console.log('sourceObserver: Detected added sources', source);
+                    if (source.src !== '' && source.src !== undefined && source.src !== null) {
+                        // The added source has a defined src attribute, request CORS
+                        requestCORS(source.src, element);
+                    }
+                });
+            }
+        }
+    });
+
+    sourceObserver.observe(element, {
+        childList: true,
+        attributes: true,
+        attributeFilter: ['src'],
+        subtree: true,
     });
 };
 
@@ -410,6 +505,10 @@ const videoAttacher = {
     },
 };
 
+// TODO: Include rbgtohsv and hsvtorbg as string functions to each fragment shader
+// Convert to HSV, invert the V value of the color, convert back to RGB
+// The result is that if you have a bright blue color it will display as a dark blue
+// And bright whites as dark blacks etc
 const glSources = {
     invert: {
         // Don't need any projection matrix. Clip space coordinates are fine
