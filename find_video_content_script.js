@@ -364,6 +364,19 @@ const toggleAttacher = {
     },
 };
 
+/**
+ * TODO: Some video players have a certain size but the actual content is smaller,
+ * usually smaller height. If a video's dimensions are smaller than the
+ * canvas's size the picture will stretch
+ * It seems like WebGL reads data straight from the intrinsic video compared to
+ * the page's video element
+ * You might therefore have to retrieve 'videoWidth' and 'videoHeight'
+ * and center the canvas horizontally and vertically.
+ * Centering is a guess, but that's usually how players are designed
+ * You can make your existing canvas a div container and within
+ * a canvas with 'videoWidth' as width and 'videoHeight' as height
+ * https://stackoverflow.com/questions/4129102/html5-video-dimensions
+ */
 const videoAttacher = {
     attach: (video) => {
         console.log('Attaching video', video);
@@ -388,9 +401,20 @@ const videoAttacher = {
         videoContainer.appendChild(renderCanvas); */
 
         // New approach with ResizeObserver to accommodate for videos in absolute positioning
+        const renderContainer = document.createElement('div');
+        renderContainer.classList.add('ss-render-container');
         const renderCanvas = document.createElement('canvas');
         renderCanvas.classList.add('ss-render-canvas');
-        video.parentNode.insertBefore(renderCanvas, video.nextSibling);
+        renderContainer.appendChild(renderCanvas);
+        video.parentNode.insertBefore(renderContainer, video.nextSibling);
+
+        video.addEventListener('loadedmetadata', () => {
+            // Set render canvas size to the video's intrinsic size
+            // videoWidth and videoHeight now available
+            console.log('Set canvas size to intrinsic video size');
+            renderCanvas.width = video.videoWidth;
+            renderCanvas.height = video.videoHeight;
+        }, false);
 
         // Detect size changes; change size and positioning of render canvas
         // Add additional observer for changes in positioning; top, right, bottom, left
@@ -406,10 +430,12 @@ const videoAttacher = {
               console.log('Element:', entry.target);
               console.log(`Element size: ${cr.width}px x ${cr.height}px`);
               console.log(`Element padding: ${cr.top}px ; ${cr.left}px`);
-              renderCanvas.width = cr.width;
-              renderCanvas.height = cr.height;
+              renderContainer.style.width = cr.width + 'px';
+              renderContainer.style.maxWidth = cr.width + 'px';
+              renderContainer.style.height = cr.height + 'px';
+              renderContainer.style.maxHeight = cr.height + 'px';
               console.log('test', entry.target.style.top, entry.target.style.right, entry.target.style.bottom, entry.target.style.left);
-              videoAttacher.requestVideoPositioning(video, renderCanvas);
+              videoAttacher.requestVideoPositioning(video, renderContainer);
             }
         });
           
@@ -429,7 +455,7 @@ const videoAttacher = {
                     mutation.target.style.left !== extractAttributeValue(mutation.oldValue, 'left')
                 ) {
                     console.log('The video node received or changed its position, requesting canvas update');
-                    videoAttacher.requestVideoPositioning(video, renderCanvas);
+                    videoAttacher.requestVideoPositioning(video, renderContainer);
                 }
             }
         });

@@ -22,10 +22,26 @@
     padding-bottom: 100%;
 }
 
-.ss-render-canvas {
+/* .ss-render-canvas {
     position: absolute;
     top: 0;
     left: 0;
+} */
+
+.ss-render-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    /* If the render canvas is smaller than the styled container;
+    position the canvas in the center of the container */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.ss-render-canvas {
+    max-width: inherit;
+    max-height: inherit;
 }
 
 .ss-toggle-gradient-background {
