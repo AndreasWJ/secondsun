@@ -411,9 +411,10 @@ const videoAttacher = {
         video.addEventListener('loadedmetadata', () => {
             // Set render canvas size to the video's intrinsic size
             // videoWidth and videoHeight now available
-            console.log('Set canvas size to intrinsic video size');
-            renderCanvas.width = video.videoWidth;
-            renderCanvas.height = video.videoHeight;
+            const { width, height } = videoAttacher.getActiveVideoArea(video);
+            console.log('Set canvas size to active video area', width, height);
+            renderCanvas.width = width;
+            renderCanvas.height = height;
         }, false);
 
         // Detect size changes; change size and positioning of render canvas
@@ -438,7 +439,7 @@ const videoAttacher = {
               videoAttacher.requestVideoPositioning(video, renderContainer);
             }
         });
-          
+
         // Observe one or multiple elements
         ro.observe(video);
 
@@ -469,6 +470,38 @@ const videoAttacher = {
         // Start displaying over the source video
         const attachData = inspected.get(video);
         attachData.filterer.init(video, renderCanvas);
+    },
+
+    /**
+     * https://nathanielpaulus.wordpress.com/2016/09/04/finding-the-true-dimensions-of-an-html5-videos-active-area/
+     */
+    getActiveVideoArea: (video) => {
+        if (video.videoWidth === undefined || video.videoHeight === undefined) {
+            throw new Error('No video metadata, cannot retrieve videoWidth and videoHeight');
+        }
+
+        // Ratio of the video's intrinsic dimensions
+        const videoRatio = video.videoWidth / video.videoHeight;
+        // The width and height of the video element
+        let width = video.offsetWidth;
+        let height = video.offsetHeight;
+        // The ratio of the element's width to its height
+        const elementRatio = width / height;
+
+        // If the video element is short and wide
+        // Element having a higher aspect ratio means the video(lower aspect ratio)
+        // must decrease it's height to fit. Black bars to the right and left as a result
+        if (elementRatio > videoRatio) {
+            width = height * videoRatio;
+        } else {
+            // It must be tall and thin, or exactly equal to the original ratio
+            height = width / videoRatio;
+        }
+
+        // Round width and height to closest pixel
+        width = Math.round(width);
+        height = Math.round(height);
+        return { width, height };
     },
 
     requestVideoPositioning: (video, renderCanvas) => {
