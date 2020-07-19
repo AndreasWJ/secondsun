@@ -742,7 +742,8 @@ const glSources = {
             }
         `,
     },
-    // TODO: Write dampen and darken shaders
+    // With dampen take pixels with 60 brightness or above
+    // and slightly decrease their brighness
     dampen: {
         vsSource: `
             attribute vec4 aVertexPosition;
@@ -760,14 +761,44 @@ const glSources = {
 
             varying highp vec2 vTextureCoord;
             precision mediump float;
+
+            ${glFunctions.rgb2hsv}
+
+            ${glFunctions.hsv2rgb}
+
+            float getCutoffVariation(float value, float cutoff, float variety) {
+                // The difference between pixel's brightness to 0.60
+                // If closer to 1.0 the larger diff is
+                float diff = max(0.0, (value - cutoff));
+                return (diff * variety);
+            }
+
             void main(void) {
                 vec4 pixelColor = texture2D(uImage, vTextureCoord);
-                float average = (pixelColor.r + pixelColor.g + pixelColor.b) / 3.0;
-                // Greyscale filter
-                gl_FragColor = vec4(average, average, average, pixelColor.a);
+                vec3 hsv = rgb2hsv(pixelColor.rgb);
+
+                // Soft cutoff value because higher brightness values will
+                // exceed 0.60 slightly to make colors easier to distinguish
+                // Harder to see differences when all values are exactly
+                // clamped to a specific value
+                float brightnessCutoff = 0.50;
+                float saturationCutoff = 0.65;
+
+                float brightnessVariation = getCutoffVariation(hsv.z, brightnessCutoff, 0.15);
+                hsv.z = clamp(hsv.z, 0.0, (brightnessCutoff + brightnessVariation));
+
+                float saturationVariation = getCutoffVariation(hsv.y, saturationCutoff, 0.25);
+                hsv.y = clamp(hsv.y, 0.0, (saturationCutoff + saturationVariation));
+
+                vec3 rgbConverted = hsv2rgb(hsv);
+                gl_FragColor = vec4(rgbConverted.rgb, pixelColor.a);
             }
         `,
     },
+    // FIXME: Filterer not set when page is loaded with toggle set to true as default
+    // Most likely not a call to filterer.set
+    // TODO: Significantly decrease brightness and saturation
+    // for a darker color look
     darken: {
         vsSource: `
             attribute vec4 aVertexPosition;
