@@ -427,16 +427,21 @@ const videoAttacher = {
         // but the position will change
         const ro = new ResizeObserver((entries) => {
             for (let entry of entries) {
-              const cr = entry.contentRect;
-              console.log('Element:', entry.target);
-              console.log(`Element size: ${cr.width}px x ${cr.height}px`);
-              console.log(`Element padding: ${cr.top}px ; ${cr.left}px`);
-              renderContainer.style.width = cr.width + 'px';
-              renderContainer.style.maxWidth = cr.width + 'px';
-              renderContainer.style.height = cr.height + 'px';
-              renderContainer.style.maxHeight = cr.height + 'px';
-              console.log('test', entry.target.style.top, entry.target.style.right, entry.target.style.bottom, entry.target.style.left);
-              videoAttacher.requestVideoPositioning(video, renderContainer);
+                const cr = entry.contentRect;
+                console.log('Element:', entry.target);
+                console.log(`Element size: ${cr.width}px x ${cr.height}px`);
+                console.log(`Element padding: ${cr.top}px ; ${cr.left}px`);
+                renderContainer.style.width = cr.width + 'px';
+                renderContainer.style.maxWidth = cr.width + 'px';
+                renderContainer.style.height = cr.height + 'px';
+                renderContainer.style.maxHeight = cr.height + 'px';
+                // Update the canvas size as well
+                const { width, height } = videoAttacher.getActiveVideoArea(video);
+                renderCanvas.width = width;
+                renderCanvas.height = height;
+
+                // Update the container's position if necessary
+                videoAttacher.requestVideoPositioning(video, renderContainer);
             }
         });
 
@@ -558,16 +563,141 @@ const videoAttacher = {
 
         // Setting top and left should be fine, the width and height depend on the video size
         renderCanvas.style.top = (videoTop - parentTop) + 'px';
-        // renderCanvas.style.right = (videoRight - parentRight);
-        // renderCanvas.style.bottom = (videoBottom - parentBottom);
         renderCanvas.style.left = (videoLeft - parentLeft) + 'px';
     },
 };
 
-// TODO: Include rbgtohsv and hsvtorbg as string functions to each fragment shader
-// Convert to HSV, invert the V value of the color, convert back to RGB
-// The result is that if you have a bright blue color it will display as a dark blue
-// And bright whites as dark blacks etc
+/**
+ * Include rbgtohsv and hsvtorbg as string functions to each fragment shader.
+ * Convert to HSV, invert the V value of the color, convert back to RGB.
+ * The result is that if you have a bright blue color it will display as a dark blue.
+ * And bright whites as dark blacks etc.
+ */
+const glFunctions = {
+    // x, y, z, w = r, g, b, a
+    // x, y, z, w = h, s, v, a
+    rgbtohsv: `
+        vec4 rbgtohsv(vec4 rgbIn) {
+            // Maintain alpha value as it won't change between color modes
+            vec4 hsvOut = vec4(0.0, 0.0, 0.0, rgbIn.w);
+            float min, max, delta;
+
+            min = (rgbIn.x < rgbIn.y) ? rgbIn.x : rgbIn.y;
+            min = (min  < rgbIn.y) ? min  : rgbIn.y;
+
+            max = (rgbIn.x > rgbIn.z) ? rgbIn.x : rgbIn.y;
+            max = (max  > rgbIn.y) ? max  : rgbIn.y;
+
+            hsvOut.z = max;                                // v
+            delta = max - min;
+            if (delta < 0.00001)
+            {
+                hsvOut.x = 0.0;
+                hsvOut.y = 0.0;
+                return hsvOut;
+            }
+            if (max > 0.0) { // NOTE: if Max is == 0, this divide would cause a crash
+                hsvOut.y = (delta / max);                  // s
+            } else {
+                // if max is 0, then r = g = b = 0              
+                // s = 0, h is undefined
+                hsvOut.y = 0.0;
+                hsvOut.x = 0.0;
+                return hsvOut;
+            }
+            if (rgbIn.x >= max)                            // > is bogus, just keeps compilor happy
+                hsvOut.x = ( rgbIn.z - rgbIn.y ) / delta;        // between yellow & magenta
+            else
+            if( rgbIn.y >= max )
+                hsvOut.x = 2.0 + ( rgbIn.z - rgbIn.x ) / delta;  // between cyan & yellow
+            else
+                hsvOut.x = 4.0 + ( rgbIn.x - rgbIn.y ) / delta;  // between magenta & cyan
+
+            hsvOut.x *= 60.0;                              // degrees
+
+            if( hsvOut.x < 0.0 )
+                hsvOut.x += 360.0;
+
+            return hsvOut;
+        }
+    `,
+
+    hsvtorgb: `
+        vec4 hsvtorgb(vec4 hsvIn) {
+            float hh, p, q, t, ff;
+            int i;
+            vec4 rgbOut = vec4(0, 0, 0, hsvIn.w);
+
+            if(hsvIn.y <= 0.0) {       // < is bogus, just shuts up warnings
+                rgbOut.x = hsvIn.z;
+                rgbOut.y = hsvIn.z;
+                rgbOut.z = hsvIn.z;
+                return rgbOut;
+            }
+
+            hh = hsvIn.x;
+            if(hh >= 360.0) hh = 0.0;
+            hh /= 60.0;
+            i = int(hh);
+            ff = hh - float(i);
+            p = hsvIn.z * (1.0 - hsvIn.y);
+            q = hsvIn.z * (1.0 - (hsvIn.y * ff));
+            t = hsvIn.z * (1.0 - (hsvIn.y * (1.0 - ff)));
+
+            if (i == 0) {
+                rgbOut.x = hsvIn.z;
+                rgbOut.y = t;
+                rgbOut.z = p;
+            } else if (i == 1) {
+                rgbOut.x = q;
+                rgbOut.y = hsvIn.z;
+                rgbOut.z = p;
+            } else if (i == 2) {
+                rgbOut.x = p;
+                rgbOut.y = hsvIn.z;
+                rgbOut.z = t;
+            } else if (i == 3) {
+                rgbOut.x = p;
+                rgbOut.y = q;
+                rgbOut.z = hsvIn.z;
+            } else if (i == 4) {
+                rgbOut.x = t;
+                rgbOut.y = p;
+                rgbOut.z = hsvIn.z;
+            } else {
+                rgbOut.x = hsvIn.z;
+                rgbOut.y = p;
+                rgbOut.z = q;
+            }
+
+            return rgbOut;
+        }
+    `,
+
+    // From https://stackoverflow.com/questions/15095909/from-rgb-to-hsv-in-opengl-glsl
+    rgb2hsv: `
+        vec3 rgb2hsv(vec3 c)
+        {
+            vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+            vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+            vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+        
+            float d = q.x - min(q.w, q.y);
+            float e = 1.0e-10;
+            return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+        }
+    `,
+
+    hsv2rgb: `
+        vec3 hsv2rgb(vec3 c)
+        {
+            vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+            vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+            return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+        }
+    `,
+};
+
 const glSources = {
     invert: {
         // Don't need any projection matrix. Clip space coordinates are fine
@@ -592,14 +722,23 @@ const glSources = {
 
             varying highp vec2 vTextureCoord;
             precision mediump float;
+
+            ${glFunctions.rgb2hsv}
+
+            ${glFunctions.hsv2rgb}
+
             void main(void) {
                 vec4 pixelColor = texture2D(uImage, vTextureCoord);
-                float average = (pixelColor.r + pixelColor.g + pixelColor.b) / 3.0;
-                // Greyscale filter
-                gl_FragColor = vec4(average, average, average, pixelColor.a);
+                vec3 hsv = rgb2hsv(pixelColor.rgb);
+                // Invert "brightness" property
+                // For example, a brightness of 79 becomes 21 and vice versa
+                hsv.z = 1.0 - hsv.z;
+                vec3 rgbConverted = hsv2rgb(hsv);
+                gl_FragColor = vec4(rgbConverted.rgb, pixelColor.a);
             }
         `,
     },
+    // TODO: Write dampen and darken shaders
     dampen: {
         vsSource: `
             attribute vec4 aVertexPosition;
@@ -1017,10 +1156,12 @@ class Filterer {
     }
 }
 
-// Maybe it's possible to set top, left, bottom, right exactly
-// knowing the relative parent and the video node
-// Right now it's mostly based on guesses, the video's style attributes,
-// and a default top and left equal to 0
+/**
+ * It seems like 'position: fixed' ancestors are relative parent themselves aswell.
+ * There isn't much documentation about it, but it would make sense if you
+ * have a nested absolute element within a fixed container.
+ * @param {*} node
+ */
 const getRelativeParent = (node) => {
     // Unnest until you find the parent with 'position: relative'
     // If not found, return document
@@ -1030,7 +1171,10 @@ const getRelativeParent = (node) => {
         return node.documentElement;
     }
 
-    if (window.getComputedStyle(node).getPropertyValue('position') === 'relative') {
+    if (
+        window.getComputedStyle(node).getPropertyValue('position') === 'relative' ||
+        window.getComputedStyle(node).getPropertyValue('position') === 'fixed'
+    ) {
         return node;
     }
 
@@ -1045,7 +1189,7 @@ const getCoords = (elem) => {
       top: box.top + window.pageYOffset,
       right: box.right + window.pageXOffset,
       bottom: box.bottom + window.pageYOffset,
-      left: box.left + window.pageXOffset
+      left: box.left + window.pageXOffset,
     };
 };
 
