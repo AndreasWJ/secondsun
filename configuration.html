@@ -7,12 +7,14 @@
         <h1>Second Sun</h1>
         <form name="modePicker">
             <h4>Pick a filter mode:</h4>
-            <!-- <input type="radio" id="invert" name="mode" value="invert">
-            <label for="invert">Invert</label><br>
-            <input type="radio" id="dampen" name="mode" value="dampen">
-            <label for="dampen">Dampen</label><br>
-            <input type="radio" id="darken" name="mode" value="darken">
-            <label for="darken">Darken</label> -->
+            <div class="container" title="Turn down brightness for all colors">
+                <input type="radio" id="darken" name="mode" value="darken">
+                <span class="checkmark">
+                    <span class="hollow"></span>
+                </span>
+                <label for="darken">Darken</label>
+            </div>
+
             <div class="container" title="Invert brightest with the darkest colors">
                 <input type="radio" id="invert" name="mode" value="invert">
                 <span class="checkmark">
@@ -27,14 +29,6 @@
                     <span class="hollow"></span>
                 </span>
                 <label for="dampen">Dampen</label>
-            </div>
-            
-            <div class="container" title="Turn down brightness for all colors">
-                <input type="radio" id="darken" name="mode" value="darken">
-                <span class="checkmark">
-                    <span class="hollow"></span>
-                </span>
-                <label for="darken">Darken</label>
             </div>
         </form>
 

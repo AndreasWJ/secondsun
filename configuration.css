@@ -46,7 +46,6 @@ label:hover {
 .container {
     display: block;
     position: relative;
-    padding-left: 35px;
     margin-bottom: 12px;
     font-size: 14px;
     -webkit-user-select: none;
@@ -63,6 +62,12 @@ label:hover {
     top: 0;
     left: 0;
     margin: 0;
+}
+
+.container label {
+    /* Padding still allows the element to be clicked.
+    Preferable, to maximize click area */
+    padding-left: 35px;
 }
 
 /* Create a custom radio button */
