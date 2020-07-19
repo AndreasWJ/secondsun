@@ -209,10 +209,10 @@ const toggleAttacher = {
 
         // Apply default toggle design
         // Create inner container
-        const toggle = document.createElement('label');
+        const toggle = document.createElement('div');
         toggle.classList.add('ss-toggle');
         // The 'for' attribute must match the checkboxes id! Not value or name or anything else
-        toggle.setAttribute('for', toggleAttacher.getCheckboxId(toggleId));
+        // toggle.setAttribute('for', toggleAttacher.getCheckboxId(toggleId));
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.id = toggleAttacher.getCheckboxId(toggleId);
@@ -243,6 +243,11 @@ const toggleAttacher = {
         const bigInner = document.createElement('div');
         bigInner.classList.add('ss-big-inner-youtube-container');
         bigInner.appendChild(innerContainer);
+        const checkboxLabel = document.createElement('label');
+        checkboxLabel.classList.add('ss-toggle-label');
+        // The 'for' attribute must match the checkboxes id! Not value or name or anything else
+        checkboxLabel.setAttribute('for', toggleAttacher.getCheckboxId(toggleId));
+        bigInner.appendChild(checkboxLabel);
 
         container.appendChild(bigInner);
 
@@ -303,11 +308,6 @@ const toggleAttacher = {
     },
 
     addToggleListener: (toggle, video, toggleId) => {
-        // Set the lastToggled to true or false
-        // Used when loading a new page to figure out to default to toggle = true or
-        // toggle = false. A user that leaves a page with a certain toggle state
-        // expects the new page to maintain that state
-        // toggle.addEventListener('click', (e) => toggleAttacher.toggleOnClick(e, video), false);
         const checkbox = toggle.querySelector(`#${toggleAttacher.getCheckboxId(toggleId)}`);
         checkbox.addEventListener('change', function (e) {
             console.log('addToggleListener change');
@@ -360,6 +360,10 @@ const toggleAttacher = {
         e.preventDefault();
 
         attachData.filterer.set.call(attachData.filterer, checked);
+        // Set the lastToggled to true or false
+        // Used when loading a new page to figure out to default to toggle = true or
+        // toggle = false. A user that leaves a page with a certain toggle state
+        // expects the new page to maintain that state
         chrome.storage.sync.set({ lastToggled: checked });
     },
 };
