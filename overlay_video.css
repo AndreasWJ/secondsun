@@ -3,7 +3,7 @@
     top: 0;
     right: 0;
     font-size: 20px;
-    background-color: rgba(221, 221, 221, 0.5);
+    background-color: rgba(221, 221, 221, 0.3);
     z-index: 2147483647;
     min-width: 35px;
     min-height: 35px;
@@ -13,7 +13,6 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    cursor: pointer;
 }
 
 .ss-default-container::after {

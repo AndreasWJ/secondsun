@@ -1230,15 +1230,21 @@ class Filterer {
 }
 
 /**
+ * Unnest until you find the parent with 'position: relative' or 'position: fixed'.
+ * If not found, return document.
  * It seems like 'position: fixed' ancestors are relative parent themselves aswell.
  * There isn't much documentation about it, but it would make sense if you
  * have a nested absolute element within a fixed container.
  * @param {*} node
  */
 const getRelativeParent = (node) => {
-    // Unnest until you find the parent with 'position: relative'
-    // If not found, return document
     if (node.parentNode === null) {
+        if (node.documentElement === undefined) {
+            // DocumentFragments doesn't have any 'documentElement' property
+            // In this case return the node element, there are no other properties available
+            return node;
+        }
+        
         // The current node is document, document nodes cannot have a parent
         // Return the document element, not the HTML as it's read-only
         return node.documentElement;
