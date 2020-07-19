@@ -3,11 +3,9 @@
 let lastToggled = null;
 // Keeps track of the number of recognized video nodes
 // Is used to assign a unique id to each video's checkbox input
-// This id is also referenced in the video's inspected entry
+// This id is also referenced in the video's 'inspected' entry
 let numberOfNodes = 0;
 
-// TODO: Request CORS if the video is from a different origin
-// If not available, show a console warning and prevent filtering
 const findVideoNodes = () => {
     // Returns a static NodeList, i.e further DOM changes won't be reflected in the list
     console.log('Finding video nodes');
@@ -42,9 +40,8 @@ const checkVideoSources = (video) => {
     }
 };
 
-// FIXME: Invalid URL error
-// It is because the src is not defined at page load
-// TODO: What you have to do is to observe video nodes
+// Video src are often not defined at page load
+// What you have to do is to observe video nodes
 // Observe for video nodes' src attributes and potential
 // children(source tags)
 // Source tags often refer to a relative path so only
@@ -321,6 +318,10 @@ const toggleAttacher = {
         toggleAttacher.applyStateStyle(checked, toggleCheckbox, toggleGradient);
     },
 
+    /**
+     * Function that enables or disables "active" styling given
+     * check status, checkbox, and background gradient.
+     */
     applyStateStyle: (checked, checkbox, gradient) => {
         console.log('toggleStyling', checked, checkbox, gradient);
 
@@ -857,6 +858,7 @@ class Filterer {
             this.hideCanvas();
         }
         
+        console.log('Set: animationReq config', this.animationReq, this.config);
         if (value === true && this.animationReq === null && this.config !== null) {
             console.log('Set: Start rendering');
             this.animationReq = requestAnimationFrame(this.render.bind(this));
@@ -982,29 +984,52 @@ class Filterer {
             }
         });
 
-        video.addEventListener('loadeddata', (e) => {
-            console.log('loadeddata: Video has loaded');
-            // Video should now be loaded but we can add a second check
-            if (video.readyState >= 3) {
-                console.log('video readyState >=, updating texture');
-                self.copyVideo = true;
-                // Block requestAnimationFrame call until the initial setting has been found
-                chrome.storage.sync.get(['renderMode'], function(result) {
-                    // If result.renderMode is undefined then apply invert as default
-                    if (result.renderMode === undefined || result.renderMode === null) {
-                        console.log('filterer init: Could not find renderMode, applying default');
-                        self.config = self.configs.invert;
-                    }
-
-                    console.log('Retrieved renderMode. Applying', result.renderMode);
-                    self.config = self.configs[result.renderMode];
-                    toggleAttacher.getDefaultState((toggleState) => {
-                        console.log('GL init. Setting with toggleState', toggleState);
-                        self.set(toggleState);
-                    });
-                });
+        // Block requestAnimationFrame call until the initial setting has been found
+        chrome.storage.sync.get(['renderMode'], function(result) {
+            // If result.renderMode is undefined then apply invert as default
+            if (result.renderMode === undefined || result.renderMode === null) {
+                console.log('filterer init: Could not find renderMode, applying default');
+                self.config = self.configs.invert;
             }
-         });
+
+            console.log('Retrieved renderMode. Applying', result.renderMode);
+            self.config = self.configs[result.renderMode];
+
+            // Only called once
+            self.onVideoReady(video, () => {
+                console.log('onVideoReady');
+                self.copyVideo = true;
+                toggleAttacher.getDefaultState((toggleState) => {
+                    console.log('GL init. Setting with toggleState', toggleState);
+                    self.set(toggleState);
+                });
+            });
+        });
+
+        // FIXME: In some cases the loadeddata callback isn't called
+        // Maybe loadeddata has already fired when the listener registers
+
+        // Moved the configuration retrieval outside to make it independent of loadeddata
+        // in cases where the event is unreliable
+
+        // Listen to play, timeupdate, and loadeddata
+        // The first that fires initializes by calling set
+    }
+
+    onVideoReady(video, cb) {
+        const callCallback = () => {
+            console.log('onVideoReady: callCallback');
+            // Remove listeners
+            video.removeEventListener('playing', callCallback, true);
+            video.removeEventListener('timeupdate', callCallback, true);
+            video.removeEventListener('loadeddata', callCallback, true);
+
+            cb();
+        };
+
+        video.addEventListener('playing', callCallback, true);
+        video.addEventListener('timeupdate', callCallback, true);
+        video.addEventListener('loadeddata', callCallback, true);
     }
 
     initBuffers(gl) {
