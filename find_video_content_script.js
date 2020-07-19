@@ -816,14 +816,27 @@ const glSources = {
 
             varying highp vec2 vTextureCoord;
             precision mediump float;
+
+            ${glFunctions.rgb2hsv}
+
+            ${glFunctions.hsv2rgb}
+
             void main(void) {
-                gl_FragColor = texture2D(uImage, vTextureCoord);
+                vec4 pixelColor = texture2D(uImage, vTextureCoord);
+                vec3 hsv = rgb2hsv(pixelColor.rgb);
+
+                float brightnessDivider = 0.65;
+                hsv.z = hsv.z - (hsv.z * brightnessDivider);
+                float saturationDivider = 0.20;
+                hsv.y = hsv.y - (hsv.y * saturationDivider);
+
+                vec3 rgbConverted = hsv2rgb(hsv);
+                gl_FragColor = vec4(rgbConverted.rgb, pixelColor.a);
             }
         `,
     },
 };
 
-// Rewrite as a class, since there can be multiple instances
 // See https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial/Animating_textures_in_WebGL
 class Filterer {
     constructor() {
