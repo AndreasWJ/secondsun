@@ -16,12 +16,17 @@ h1 {
     margin-block-end: 0;
 }
 
+h4 {
+    color: #655f65;
+}
+
 a {
-    color: inherit;
+    color: #655f65;
     text-decoration: none; /* no underline */
     transition: 0.3s;
 }
 
+/* FIXME: Not working */
 a:hover {
     color: #f4f4f4;
 }
@@ -209,6 +214,6 @@ label:hover {
     align-items: center;
 }
 
-h4 {
-    color: #655f65;
+#footer > a h4 {
+    color: inherit;
 }

@@ -225,7 +225,7 @@ const toggleAttacher = {
         toggle.appendChild(checkbox);
 
         const buttonImage = document.createElement('img');
-        buttonImage.src = chrome.runtime.getURL('images/IconTransparent.png');
+        buttonImage.src = chrome.runtime.getURL('images/IconTransparent-128.png');
         toggle.appendChild(buttonImage);
 
         const toggleContainer = document.createElement('div');
@@ -579,106 +579,6 @@ const videoAttacher = {
  * And bright whites as dark blacks etc.
  */
 const glFunctions = {
-    // x, y, z, w = r, g, b, a
-    // x, y, z, w = h, s, v, a
-    rgbtohsv: `
-        vec4 rbgtohsv(vec4 rgbIn) {
-            // Maintain alpha value as it won't change between color modes
-            vec4 hsvOut = vec4(0.0, 0.0, 0.0, rgbIn.w);
-            float min, max, delta;
-
-            min = (rgbIn.x < rgbIn.y) ? rgbIn.x : rgbIn.y;
-            min = (min  < rgbIn.y) ? min  : rgbIn.y;
-
-            max = (rgbIn.x > rgbIn.z) ? rgbIn.x : rgbIn.y;
-            max = (max  > rgbIn.y) ? max  : rgbIn.y;
-
-            hsvOut.z = max;                                // v
-            delta = max - min;
-            if (delta < 0.00001)
-            {
-                hsvOut.x = 0.0;
-                hsvOut.y = 0.0;
-                return hsvOut;
-            }
-            if (max > 0.0) { // NOTE: if Max is == 0, this divide would cause a crash
-                hsvOut.y = (delta / max);                  // s
-            } else {
-                // if max is 0, then r = g = b = 0              
-                // s = 0, h is undefined
-                hsvOut.y = 0.0;
-                hsvOut.x = 0.0;
-                return hsvOut;
-            }
-            if (rgbIn.x >= max)                            // > is bogus, just keeps compilor happy
-                hsvOut.x = ( rgbIn.z - rgbIn.y ) / delta;        // between yellow & magenta
-            else
-            if( rgbIn.y >= max )
-                hsvOut.x = 2.0 + ( rgbIn.z - rgbIn.x ) / delta;  // between cyan & yellow
-            else
-                hsvOut.x = 4.0 + ( rgbIn.x - rgbIn.y ) / delta;  // between magenta & cyan
-
-            hsvOut.x *= 60.0;                              // degrees
-
-            if( hsvOut.x < 0.0 )
-                hsvOut.x += 360.0;
-
-            return hsvOut;
-        }
-    `,
-
-    hsvtorgb: `
-        vec4 hsvtorgb(vec4 hsvIn) {
-            float hh, p, q, t, ff;
-            int i;
-            vec4 rgbOut = vec4(0, 0, 0, hsvIn.w);
-
-            if(hsvIn.y <= 0.0) {       // < is bogus, just shuts up warnings
-                rgbOut.x = hsvIn.z;
-                rgbOut.y = hsvIn.z;
-                rgbOut.z = hsvIn.z;
-                return rgbOut;
-            }
-
-            hh = hsvIn.x;
-            if(hh >= 360.0) hh = 0.0;
-            hh /= 60.0;
-            i = int(hh);
-            ff = hh - float(i);
-            p = hsvIn.z * (1.0 - hsvIn.y);
-            q = hsvIn.z * (1.0 - (hsvIn.y * ff));
-            t = hsvIn.z * (1.0 - (hsvIn.y * (1.0 - ff)));
-
-            if (i == 0) {
-                rgbOut.x = hsvIn.z;
-                rgbOut.y = t;
-                rgbOut.z = p;
-            } else if (i == 1) {
-                rgbOut.x = q;
-                rgbOut.y = hsvIn.z;
-                rgbOut.z = p;
-            } else if (i == 2) {
-                rgbOut.x = p;
-                rgbOut.y = hsvIn.z;
-                rgbOut.z = t;
-            } else if (i == 3) {
-                rgbOut.x = p;
-                rgbOut.y = q;
-                rgbOut.z = hsvIn.z;
-            } else if (i == 4) {
-                rgbOut.x = t;
-                rgbOut.y = p;
-                rgbOut.z = hsvIn.z;
-            } else {
-                rgbOut.x = hsvIn.z;
-                rgbOut.y = p;
-                rgbOut.z = q;
-            }
-
-            return rgbOut;
-        }
-    `,
-
     // From https://stackoverflow.com/questions/15095909/from-rgb-to-hsv-in-opengl-glsl
     rgb2hsv: `
         vec3 rgb2hsv(vec3 c)
@@ -796,10 +696,7 @@ const glSources = {
             }
         `,
     },
-    // FIXME: Filterer not set when page is loaded with toggle set to true as default
-    // Most likely not a call to filterer.set
-    // TODO: Significantly decrease brightness and saturation
-    // for a darker color look
+    // Significantly decrease brightness and saturation for a darker color look
     darken: {
         vsSource: `
             attribute vec4 aVertexPosition;
@@ -826,7 +723,7 @@ const glSources = {
                 vec4 pixelColor = texture2D(uImage, vTextureCoord);
                 vec3 hsv = rgb2hsv(pixelColor.rgb);
 
-                float brightnessDivider = 0.65;
+                float brightnessDivider = 0.75;
                 hsv.z = hsv.z - (hsv.z * brightnessDivider);
                 float saturationDivider = 0.20;
                 hsv.y = hsv.y - (hsv.y * saturationDivider);

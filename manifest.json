@@ -3,7 +3,9 @@
     "version": "1.0",
     "description" : "Save your eyes when watching videos",
     "icons": {
-      "128": "icon.png"
+      "16": "images/IconGradient2-16.png",
+      "48": "images/IconGradient2-48.png",
+      "128": "images/IconGradient2-128.png"
     },
     "content_scripts": [
       {
@@ -20,7 +22,11 @@
     ],
     "browser_action": {
       "default_name": "Block sun",
-      "default_icon": "icon.png",
+      "default_icon": {
+        "16": "images/IconTransparent-16.png",
+        "24": "images/IconTransparent-24.png",
+        "32": "images/IconTransparent-32.png"
+      },
       "default_popup": "configuration.html"
     },
     "web_accessible_resources": ["overlay_video.css", "images/*"],
