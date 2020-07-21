@@ -5,15 +5,23 @@ let lastToggled = null;
 // Is used to assign a unique id to each video's checkbox input
 // This id is also referenced in the video's 'inspected' entry
 let numberOfNodes = 0;
+// Enable or disable console logging
+const debug = false;
+
+const log = function() {
+    if (debug === true) {
+        console.log.apply(console, arguments);
+    }
+}
 
 const findVideoNodes = () => {
     // Returns a static NodeList, i.e further DOM changes won't be reflected in the list
-    console.log('Finding video nodes');
+    log('Finding video nodes');
     const videoNodes = document.querySelectorAll('video');
-    console.log('videoNodes', JSON.stringify(videoNodes));
+    log('videoNodes', JSON.stringify(videoNodes));
     
     if (videoNodes.length <= 0) {
-        console.log('No video elements found');
+        log('No video elements found');
         return;
     }
 
@@ -31,10 +39,10 @@ const findVideoNodes = () => {
 const checkVideoSources = (video) => {
     // Check if CORS is needed
     if (video.src !== '' && video.src !== undefined && video.src !== null) {
-        console.log('checkVideoSources: Requesting CORS for video');
+        log('checkVideoSources: Requesting CORS for video');
         requestCORS(video.src, video);
     } else {
-        console.log('checkVideoSources: Checking children sources');
+        log('checkVideoSources: Checking children sources');
         const sources = video.querySelectorAll('source');
         sources.forEach((source) => requestCORS(source.src, video));
     }
@@ -47,8 +55,6 @@ const checkVideoSources = (video) => {
 // Source tags often refer to a relative path so only
 // compare and request CORS if it's an absolute path
 const requestCORS = (path, video) => {
-    console.log('requestCORS path video.src', path, video.src);
-    console.log('requestCORS video', JSON.parse(JSON.stringify(video)));
     if (shareOrigin(path) === false) {
         // TODO: Send a HTTP request to the other origin with an attempted access with CORS
         // If a fail response is received the extension cannot work. Show an error message
@@ -56,14 +62,14 @@ const requestCORS = (path, video) => {
 
         // Works with 'anonymous'
         // However, what happens if anonymous fails?
-        console.log('Origins does not match');
+        log('Origins does not match');
         // Video and the page the extension is running on doesn't share origin
         if (video.crossOrigin !== '') {
-            console.log('Video crossOrigin set to anonymous');
+            log('Video crossOrigin set to anonymous');
             video.crossOrigin = '';
         }
     } else {
-        console.log('Origins match');
+        log('Origins match');
     }
 };
 
@@ -95,12 +101,12 @@ const addSourceObserver = (element) => {
                 // source tags if present in regards to CORS
                 // From the examples online it seems that crossOrigin should be set
                 // on the video element if one of the sources refers cross-domain
-                console.log('sourceObserver: Detected src mutation');
+                log('sourceObserver: Detected src mutation');
                 requestCORS(mutation.target.src, element);
             } else if (mutation.type === 'childList') {
                 // A source was added or removed
                 mutation.addedNodes.forEach((source) => {
-                    console.log('sourceObserver: Detected added sources', source);
+                    log('sourceObserver: Detected added sources', source);
                     if (source.src !== '' && source.src !== undefined && source.src !== null) {
                         // The added source has a defined src attribute, request CORS
                         requestCORS(source.src, element);
@@ -126,7 +132,7 @@ const addStylesheet = (function() {
         if (!executed) {
             executed = true;
 
-            console.log('Applying stylesheet');
+            log('Applying stylesheet');
             const style = document.createElement('link');
             style.rel = 'stylesheet';
             style.type = 'text/css';
@@ -137,7 +143,7 @@ const addStylesheet = (function() {
 })();
 
 const attach = (video) => {
-    console.log('Attaching to', video);
+    log('Attaching to', video);
     toggleAttacher.attach(video);
     videoAttacher.attach(video);
 };
@@ -156,20 +162,22 @@ const toggleAttacher = {
         const youtubeControls = document.querySelector('.ytp-right-controls');
 
         if (youtubeControls !== undefined && youtubeControls !== null) {
-            console.log('Found YouTube controls in document');
+            log('Found YouTube controls in document');
             toggle = toggleAttacher.attachYouTube(video, youtubeControls);
         } else {
             // No known player could be identified; apply default toggle
             toggle = toggleAttacher.attachDefault(video);
         }
 
-        // Update the inspected map with a referenced to the created toggle button
-        mapAppend(inspected, video, { toggle });
+        if (toggle !== null) {
+            // Update the inspected map with a referenced to the created toggle button
+            mapAppend(inspected, video, { toggle });
+        }
     },
 
     getDefaultState: (cb) => {
         if (lastToggled !== null) {
-            console.log('Found default toggle state', lastToggled);
+            log('Found default toggle state', lastToggled);
             return cb(lastToggled);
         }
 
@@ -177,10 +185,10 @@ const toggleAttacher = {
         // Retrieve the last toggle state before searching and attaching the page
         chrome.storage.sync.get(['lastToggled'], (result) => {
             if (result.lastToggled === undefined || result.lastToggled === null) {
-                console.log('Could not find previous toggle state, default to false');
+                log('Could not find previous toggle state, default to false');
                 lastToggled = false;
             } else {
-                console.log('Retrieved lastToggled', result.lastToggled);
+                log('Retrieved lastToggled', result.lastToggled);
                 lastToggled = result.lastToggled;
             }
 
@@ -197,25 +205,21 @@ const toggleAttacher = {
      * Animate transparent icon by scaling down when checked.
      */
     createToggle: (containerType, toggleId) => {
-        console.log('Creating toggle with toggleId', toggleId);
+        log('Creating toggle with toggleId', toggleId);
         const container = document.createElement('div');
         container.classList.add(containerType);
         // Create the animated gradient background, animated in on check
         const gradientBackground = document.createElement('div');
         gradientBackground.classList.add('ss-toggle-gradient-background');
 
-        // Apply default toggle design
-        // Create inner container
         const toggle = document.createElement('div');
         toggle.classList.add('ss-toggle');
-        // The 'for' attribute must match the checkboxes id! Not value or name or anything else
-        // toggle.setAttribute('for', toggleAttacher.getCheckboxId(toggleId));
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.id = toggleAttacher.getCheckboxId(toggleId);
         // Set checkbox default value to lastToggled
         toggleAttacher.getDefaultState((toggleState) => {
-            console.log('toggleState got default value', toggleState);
+            log('toggleState got default value', toggleState);
             checkbox.checked = toggleState;
 
             // Add active style class. I.e if the checkbox is checked initally apply
@@ -256,7 +260,7 @@ const toggleAttacher = {
      * even when opening in new tab.
      */
     attachYouTube: (video, controlsNode) => {
-        console.log('Attaching YouTube toggle button to controls', controlsNode);
+        log('Attaching YouTube toggle button to controls', controlsNode);
 
         if (controlsNode === null) {
             console.warn('Could not find controls container');
@@ -268,8 +272,8 @@ const toggleAttacher = {
 
         // Ensure that a container has not yet already been injected
         if (controlsNode.querySelector('.ss-youtube-container') !== null) {
-            console.log('Toggle container already in DOM');
-            return;
+            log('Toggle container already in DOM');
+            return null;
         }
 
         toggleAttacher.addToggleListener(toggle, video, inspected.get(video).id);
@@ -279,15 +283,15 @@ const toggleAttacher = {
     },
 
     attachDefault: (video) => {
-        console.log('Attaching default toggle button', video);
+        log('Attaching default toggle button', video);
 
         // CSS class 'ss-default-container' applies position styling
         const toggle = toggleAttacher.createToggle('ss-default-container', inspected.get(video).id);
 
         // Ensure that a container has not yet already been injected
         if (video.nextSibling && video.nextSibling.classList.contains('ss-default-container')) {
-            console.log('Toggle container already in DOM');
-            return;
+            log('Toggle container already in DOM');
+            return null;
         }
 
         // Event listener should be on the element in order to be able to stop the propagation
@@ -298,7 +302,6 @@ const toggleAttacher = {
         }); */
         toggleAttacher.addToggleListener(toggle, video, inspected.get(video).id);
         // Video nodes can't contain elements, place it adjacent to the video
-        // video.appendChild(container);
         video.parentNode.insertBefore(toggle, video.nextSibling);
 
         return toggle;
@@ -307,7 +310,7 @@ const toggleAttacher = {
     addToggleListener: (toggle, video, toggleId) => {
         const checkbox = toggle.querySelector(`#${toggleAttacher.getCheckboxId(toggleId)}`);
         checkbox.addEventListener('change', function (e) {
-            console.log('addToggleListener change');
+            log('addToggleListener change');
             toggleAttacher.toggleOnClick(e, video, this.checked);
         }, false);
     },
@@ -323,20 +326,20 @@ const toggleAttacher = {
      * check status, checkbox, and background gradient.
      */
     applyStateStyle: (checked, checkbox, gradient) => {
-        console.log('toggleStyling', checked, checkbox, gradient);
+        log('toggleStyling', checked, checkbox, gradient);
 
         // Named function. Needed to eventually remove the event listener
         const animatedOut = () => {
-            console.log('toggle animationend');
+            log('toggle animationend');
             gradient.removeEventListener('animationend', animatedOut);
             gradient.classList.remove('ss-toggle-gradient-background-animate-out');
         };
 
         if (checked) {
-            console.log('Styling checkbox according to true');
+            log('Styling checkbox according to true');
             gradient.classList.add('ss-toggle-gradient-background-animate-in');
         } else {
-            console.log('Styling checkbox according to false');
+            log('Styling checkbox according to false');
             // Only animate "out" if the element has animated in
             // Will prevent cases where the page loads and the element is animated out on load
             if (gradient.classList.contains('ss-toggle-gradient-background-animate-in')) {
@@ -351,7 +354,7 @@ const toggleAttacher = {
     // Make ids into classes in case there are multiple videos on a page
     // Yes. Elements can't exists within the same document with the same id
     toggleOnClick: (e, video, checked) => {
-        console.log('Toggle click');
+        log('Toggle click');
         const attachData = inspected.get(video);
         toggleAttacher.updateStyle(checked, attachData.toggle, attachData.id);
 
@@ -370,7 +373,7 @@ const toggleAttacher = {
 };
 
 /**
- * TODO: Some video players have a certain size but the actual content is smaller,
+ * Some video players have a certain size but the actual content is smaller,
  * usually smaller height. If a video's dimensions are smaller than the
  * canvas's size the picture will stretch
  * It seems like WebGL reads data straight from the intrinsic video compared to
@@ -384,27 +387,7 @@ const toggleAttacher = {
  */
 const videoAttacher = {
     attach: (video) => {
-        console.log('Attaching video', video);
-        /* const videoContainer = document.createElement('div');
-        videoContainer.id = 'ss-video-container';
-        const renderCanvas = document.createElement('canvas');
-        renderCanvas.id = 'ss-render-canvas';
-        // Copy width and height from video to intermediary canvas
-        // Figure out a way for dynamic video overlay across different players
-        // You might have to put your own container around the video
-        // const videoStyle = window.getComputedStyle(video);
-        // renderCanvas.style.width = videoStyle.width;
-        // renderCanvas.style.height = videoStyle.height;
-        // Append the video container as an inner container
-        video.parentNode.appendChild(videoContainer);
-
-        // Append canvas adjacent to the source element
-        // video.parentNode.insertBefore(renderCanvas, video.nextSibling);
-        // Move the video into its new container
-        // 'appendChild' should remove the element after copy
-        videoContainer.appendChild(video);
-        videoContainer.appendChild(renderCanvas); */
-
+        log('Attaching video', video);
         // New approach with ResizeObserver to accommodate for videos in absolute positioning
         const renderContainer = document.createElement('div');
         renderContainer.classList.add('ss-render-container');
@@ -417,7 +400,7 @@ const videoAttacher = {
             // Set render canvas size to the video's intrinsic size
             // videoWidth and videoHeight now available
             const { width, height } = videoAttacher.getActiveVideoArea(video);
-            console.log('Set canvas size to active video area', width, height);
+            log('Set canvas size to active video area', width, height);
             renderCanvas.width = width;
             renderCanvas.height = height;
         }, false);
@@ -433,9 +416,9 @@ const videoAttacher = {
         const ro = new ResizeObserver((entries) => {
             for (let entry of entries) {
                 const cr = entry.contentRect;
-                console.log('Element:', entry.target);
-                console.log(`Element size: ${cr.width}px x ${cr.height}px`);
-                console.log(`Element padding: ${cr.top}px ; ${cr.left}px`);
+                log('Element:', entry.target);
+                log(`Element size: ${cr.width}px x ${cr.height}px`);
+                log(`Element padding: ${cr.top}px ; ${cr.left}px`);
                 renderContainer.style.width = cr.width + 'px';
                 renderContainer.style.maxWidth = cr.width + 'px';
                 renderContainer.style.height = cr.height + 'px';
@@ -465,7 +448,7 @@ const videoAttacher = {
                     mutation.target.style.bottom !== extractAttributeValue(mutation.oldValue, 'bottom') ||
                     mutation.target.style.left !== extractAttributeValue(mutation.oldValue, 'left')
                 ) {
-                    console.log('The video node received or changed its position, requesting canvas update');
+                    log('The video node received or changed its position, requesting canvas update');
                     videoAttacher.requestVideoPositioning(video, renderContainer);
                 }
             }
@@ -515,11 +498,11 @@ const videoAttacher = {
     },
 
     requestVideoPositioning: (video, renderCanvas) => {
-        console.log('Requesting new canvas position');
+        log('Requesting new canvas position');
         // If the video node has set position, rely on it
         // Check if any inline positions are set
         if (hasInlineStyle(video, 'top', 'right', 'bottom', 'left')) {
-            console.log('Found existing inline video position, relying on it');
+            log('Found existing inline video position, relying on it');
             renderCanvas.style.top = video.style.top;
             renderCanvas.style.right = video.style.right;
             renderCanvas.style.bottom = video.style.bottom;
@@ -529,7 +512,7 @@ const videoAttacher = {
 
         // Check if any positions are set within a stylesheet
         if (hasStylesheetStyle(video, 'top', 'right', 'bottom', 'left')) {
-            console.log('Found existing stylesheet video position, relying on it');
+            log('Found existing stylesheet video position, relying on it');
             renderCanvas.style.top = window.getComputedStyle(video).getPropertyValue('top');
             renderCanvas.style.right = window.getComputedStyle(video).getPropertyValue('right');
             renderCanvas.style.bottom = window.getComputedStyle(video).getPropertyValue('bottom');
@@ -537,9 +520,9 @@ const videoAttacher = {
             return;
         }
 
-        console.log('Calculating canvas positioning based on relative parent and video');
+        log('Calculating canvas positioning based on relative parent and video');
         const relativeParent = getRelativeParent(video);
-        console.log('New relative parent', relativeParent);
+        log('New relative parent', relativeParent);
 
         // Compare video's and relative parent document-relative coordinates
         // as absolute positioning is based on document rather than window
@@ -559,7 +542,7 @@ const videoAttacher = {
             left: videoLeft,
         } = getCoords(video);
 
-        console.log(
+        log(
             'New top', (videoTop - parentTop),
             'new right', (videoRight - parentRight),
             'New bottom', (videoBottom - parentBottom),
@@ -747,7 +730,7 @@ class Filterer {
     }
 
     set(value) {
-        console.log('Filterer got set', value);
+        log('Filterer got set', value);
         
         if (value === true) {
             this.showCanvas();
@@ -755,12 +738,12 @@ class Filterer {
             this.hideCanvas();
         }
         
-        console.log('Set: animationReq config', this.animationReq, this.config);
         if (value === true && this.animationReq === null && this.config !== null) {
-            console.log('Set: Start rendering');
+            log('Set: Start rendering');
             this.animationReq = requestAnimationFrame(this.render.bind(this));
         } else if (this.animationReq !== null) {
             // The filter has been toggled off
+            log('Set: Stop rendering');
             cancelAnimationFrame(this.animationReq);
             this.animationReq = null;
         }
@@ -821,7 +804,7 @@ class Filterer {
     }
 
     init(video, renderCanvas) {
-        console.log('Initializing filterer');
+        log('Initializing filterer');
         this.video = video;
         this.renderCanvas = renderCanvas;
 
@@ -850,17 +833,17 @@ class Filterer {
         // and 'WebGL: INVALID_VALUE: texImage2D: no video' may occur because
         // data can't be fetched when the video is paused, is buffering, or has ended
         video.addEventListener('pause', function() {
-            console.log('Detected pause, not updating texture');
+            log('Detected pause, not updating texture');
             self.copyVideo = false;
         }, true);
         
         video.addEventListener('waiting', function() {
-            console.log('Detected pause, not updating texture');
+            log('Detected pause, not updating texture');
             self.copyVideo = false;
         }, true);
         
         video.addEventListener('ended', function() {
-            console.log('Detected pause, not updating texture');
+            log('Detected pause, not updating texture');
             self.copyVideo = false;
         }, true);
 
@@ -869,12 +852,12 @@ class Filterer {
         this.texture = this.initTexture(this.gl);
 
         chrome.storage.onChanged.addListener((changes, namespace) => {
-            console.log('chrome.storage.onChanged', changes, namespace);
+            log('chrome.storage.onChanged', changes, namespace);
             for (const key in changes) {
                 if (key === 'renderMode') {
                     // Change config
                     // New value available at changes[renderMode].newValue
-                    console.log('Changing render config to', changes[key].newValue);
+                    log('Changing render config to', changes[key].newValue);
                     const newMode = changes[key].newValue;
                     self.config = self.configs[newMode];
                 }
@@ -885,19 +868,18 @@ class Filterer {
         chrome.storage.sync.get(['renderMode'], function(result) {
             // If result.renderMode is undefined then apply invert as default
             if (result.renderMode === undefined || result.renderMode === null) {
-                console.log('filterer init: Could not find renderMode, applying default');
+                log('filterer init: Could not find renderMode, applying default');
                 self.config = self.configs.invert;
             }
 
-            console.log('Retrieved renderMode. Applying', result.renderMode);
+            log('Retrieved renderMode. Applying', result.renderMode);
             self.config = self.configs[result.renderMode];
-
             // Only called once
             self.onVideoReady(video, () => {
-                console.log('onVideoReady');
+                log('onVideoReady');
                 self.copyVideo = true;
                 toggleAttacher.getDefaultState((toggleState) => {
-                    console.log('GL init. Setting with toggleState', toggleState);
+                    log('GL init. Setting with toggleState', toggleState);
                     self.set(toggleState);
                 });
             });
@@ -915,7 +897,6 @@ class Filterer {
 
     onVideoReady(video, cb) {
         const callCallback = () => {
-            console.log('onVideoReady: callCallback');
             // Remove listeners
             video.removeEventListener('playing', callCallback, true);
             video.removeEventListener('timeupdate', callCallback, true);
@@ -1292,7 +1273,7 @@ const videoObserver = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
         const addedNodes = [ ...mutation.addedNodes ];          // Converted to array for simplicity
         if (addedNodes.some((node) => node.tagName === 'VIDEO')) {
-            console.log('Detected mutation; added video as element');
+            log('Detected mutation; added video as element');
             
             findVideoNodes();
         }
@@ -1300,7 +1281,8 @@ const videoObserver = new MutationObserver((mutations) => {
 });
 
 window.onload = () => {
-    console.log('find_video_content_script.js window onload');
+    log('find_video_content_script.js window onload');
+    // Initially, look for video elements
     findVideoNodes();
     // Observe if new videos are added
     videoObserver.observe(document, { childList: true, subtree: true });

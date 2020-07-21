@@ -2,7 +2,6 @@ window.onload = () => {
     console.log('Browser action script loaded');
 
     const radios = document.modePicker.mode;
-    console.log('radios', radios);
     let prev = null;
 
     // Load previous recorded mode from synced storage
